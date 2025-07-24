@@ -5,19 +5,23 @@ import (
 	"path/filepath"
 
 	"github.com/khevencolino/Kite/internal/lexer"
+	"github.com/khevencolino/Kite/internal/parser"
 	"github.com/khevencolino/Kite/internal/utils"
 )
 
 // Compiler representa o compilador principal
 type Compiler struct {
-	lexer   *lexer.Lexer // Analisador léxico
-	gerador *Generator   // Gerador de código
+	lexer         *lexer.Lexer          // Analisador léxico
+	gerador       *Generator            // Gerador de código
+	parser        *parser.Parser        // Parser
+	interpretador *parser.Interpretador // Interpretador
 }
 
 // NovoCompilador cria um novo compilador
 func NovoCompilador() *Compiler {
 	return &Compiler{
-		gerador: NovoGerador(),
+		gerador:       NovoGerador(),
+		interpretador: parser.NovoInterpretador(),
 	}
 }
 
@@ -38,6 +42,21 @@ func (c *Compiler) CompilarArquivo(arquivoEntrada string) error {
 	// Imprime tokens para depuração
 	fmt.Printf("Tokens encontrados:\n")
 	lexer.ImprimirTokens(tokens)
+
+	ast, err := c.analisarSintaxe(tokens)
+	if err != nil {
+		return err
+	}
+
+	// ADICIONAR: Visualizar árvore
+	visualizador := parser.NovoVisualizador()
+	visualizador.ImprimirArvore(ast)
+
+	resultado, err := c.interpretador.Interpretar(ast)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Resultado da expressão: %d\n", resultado)
 
 	// Extrai o primeiro número (lógica temporária)
 	primeiroNumero, err := c.extrairPrimeiroNumero(tokens)
@@ -82,4 +101,9 @@ func (c *Compiler) extrairPrimeiroNumero(tokens []lexer.Token) (string, error) {
 		}
 	}
 	return "", utils.NovoErro("nenhum número encontrado", 0, 0, "")
+}
+
+func (c *Compiler) analisarSintaxe(tokens []lexer.Token) (parser.Expressao, error) {
+	c.parser = parser.NovoParser(tokens)
+	return c.parser.AnalisarPrograma()
 }
