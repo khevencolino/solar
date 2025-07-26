@@ -462,7 +462,7 @@ docker run --rm -v $(pwd):/workspace -w /workspace \
 
 ## 📝 Licença
 
-Este projeto está sob licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
+Este projeto está sob licença GPL-3.0. Veja o arquivo `LICENSE` para mais detalhes.
 
 ## 🐛 Problemas Conhecidos
 
