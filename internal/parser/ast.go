@@ -56,7 +56,8 @@ const (
 	ADICAO TipoOperador = iota
 	SUBTRACAO
 	MULTIPLICACAO
-	DIVISAO // FALTA POWER add dps
+	DIVISAO
+	POWER
 )
 
 // String retorna representação em string do operador
@@ -70,6 +71,8 @@ func (t TipoOperador) String() string {
 		return "*"
 	case DIVISAO:
 		return "/"
+	case POWER:
+		return "**"
 	default:
 		return "?"
 	}

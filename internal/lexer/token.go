@@ -12,8 +12,10 @@ const (
 	MINUS                       // Operador de subtração (-)
 	MULTIPLY                    // Operador de multiplicação (*)
 	POWER                       // Operador de potência (**)
+	DIVIDE                      // Operador de divisão
 	LPAREN                      // Parêntese esquerdo (()
 	RPAREN                      // Parêntese direito ())
+	COMMENT                     // Comentarios
 	WHITESPACE                  // Espaços em branco
 	EOF                         // Fim do arquivo
 	INVALID                     // Token inválido
@@ -32,12 +34,16 @@ func (t TokenType) String() string {
 		return "MULTIPLY"
 	case POWER:
 		return "POWER"
+	case DIVIDE:
+		return "DIVIDE"
 	case LPAREN:
 		return "LPAREN"
 	case RPAREN:
 		return "RPAREN"
 	case WHITESPACE:
 		return "WHITESPACE"
+	case COMMENT:
+		return "COMMENT"
 	case EOF:
 		return "EOF"
 	case INVALID:
@@ -70,7 +76,7 @@ func NovoToken(tipoToken TokenType, valor string, posicao Position) Token {
 
 // EOperador verifica se o token é um operador
 func (t Token) EOperador() bool {
-	return t.Type == PLUS || t.Type == MINUS || t.Type == MULTIPLY || t.Type == POWER
+	return t.Type == PLUS || t.Type == MINUS || t.Type == MULTIPLY || t.Type == POWER || t.Type == DIVIDE
 }
 
 // ENumero verifica se o token é um número

@@ -111,7 +111,9 @@ func (p *Parser) analisarOperador() (TipoOperador, error) {
 	case lexer.MULTIPLY:
 		return MULTIPLICACAO, nil
 	case lexer.POWER:
-		return MULTIPLICACAO, nil
+		return POWER, nil
+	case lexer.DIVIDE:
+		return DIVISAO, nil
 	default:
 		return 0, utils.NovoErro(
 			"operador inválido",

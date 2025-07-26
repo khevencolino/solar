@@ -1,6 +1,10 @@
 package parser
 
-import "github.com/khevencolino/Kite/internal/utils"
+import (
+	"math"
+
+	"github.com/khevencolino/Kite/internal/utils"
+)
 
 // Interpretador executa a árvore sintática
 type Interpretador struct{}
@@ -11,15 +15,15 @@ func NovoInterpretador() *Interpretador {
 }
 
 // Interpretar executa uma expressão e retorna o resultado
-func (i *Interpretador) Interpretar(expressao Expressao) (int, error) {
+func (i *Interpretador) Interpretar(expressao Expressao) (any, error) {
 	resultado := expressao.Aceitar(i)
 	if erro, ok := resultado.(error); ok {
 		return 0, erro
 	}
-	return resultado.(int), nil
+	return resultado, nil
 }
 
-// VisitarConstante implementa visitor para constantes
+// Constante implementa visitor para constantes
 func (i *Interpretador) Constante(constante *Constante) interface{} {
 	return constante.Valor
 }
@@ -58,6 +62,8 @@ func (i *Interpretador) OperacaoBinaria(operacao *OperacaoBinaria) interface{} {
 			)
 		}
 		return esquerdo / direito
+	case POWER:
+		return math.Pow(float64(esquerdo), float64(direito))
 	default:
 		return utils.NovoErro(
 			"operador desconhecido",

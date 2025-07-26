@@ -57,7 +57,7 @@ func (c *Compiler) CompilarArquivo(arquivoEntrada string) error {
 		return err
 	}
 
-	fmt.Printf("Resultado da expressão: %d\n", resultado)
+	fmt.Println("Resultado da expressão: ", resultado)
 
 	// // Extrai o primeiro número (lógica temporária)
 	// primeiroNumero, err := c.extrairPrimeiroNumero(tokens)

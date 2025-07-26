@@ -31,12 +31,14 @@ func (l *Lexer) inicializarPadroes() {
 	l.padroes = map[TokenType]*regexp.Regexp{
 		NUMBER:     regexp.MustCompile(`^\d+`),  // Números: 123, 456
 		PLUS:       regexp.MustCompile(`^\+`),   // Adição: +
-		MINUS:      regexp.MustCompile(`^-`),    // Subtração: -
+		MINUS:      regexp.MustCompile(`^-`),    // Subtraço: -
 		MULTIPLY:   regexp.MustCompile(`^\*`),   // Multiplicação: *
 		POWER:      regexp.MustCompile(`^\*\*`), // Potência: **
+		DIVIDE:     regexp.MustCompile(`^/`),    // Divisão
 		LPAREN:     regexp.MustCompile(`^\(`),   // Parêntese esquerdo: (
 		RPAREN:     regexp.MustCompile(`^\)`),   // Parêntese direito: )
 		WHITESPACE: regexp.MustCompile(`^\s+`),  // Espaços em branco
+		COMMENT:    regexp.MustCompile(`^//.*`), // Comentarios //
 	}
 }
 
@@ -51,7 +53,7 @@ func (l *Lexer) Tokenizar() ([]Token, error) {
 		}
 
 		// Pula espaços em branco mas adiciona outros tokens
-		if token.Type != WHITESPACE {
+		if token.Type != WHITESPACE && token.Type != COMMENT {
 			tokens = append(tokens, token)
 		}
 
@@ -73,7 +75,7 @@ func (l *Lexer) proximoToken() (Token, error) {
 	restante := l.entrada[l.posicao:]
 
 	// Tenta fazer match com cada padrão (ordem importa para ** vs *)
-	tiposToken := []TokenType{POWER, NUMBER, PLUS, MINUS, MULTIPLY, LPAREN, RPAREN, WHITESPACE}
+	tiposToken := []TokenType{COMMENT, POWER, NUMBER, PLUS, MINUS, DIVIDE, MULTIPLY, LPAREN, RPAREN, WHITESPACE}
 
 	for _, tipoToken := range tiposToken {
 		if match := l.padroes[tipoToken].FindString(restante); match != "" {
