@@ -4,7 +4,7 @@
 
 # Variáveis
 COMPILER_NAME := kite-compiler
-COMPILER_MAIN := ./main.go
+COMPILER_MAIN := ./cmd/compiler/main.go
 OUTPUT_ASM := result/saida.s
 OUTPUT_OBJ := saida.o
 RUNTIME_S := external/runtime.s
