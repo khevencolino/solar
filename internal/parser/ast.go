@@ -8,7 +8,7 @@ import (
 
 // Expressao representa a interface base para todos os nós da AST
 type Expressao interface {
-	Aceitar(visitante Visitante) interface{}
+	Aceitar(node Node) interface{}
 	String() string
 }
 
@@ -19,8 +19,8 @@ type Constante struct {
 }
 
 // Aceitar implementa o padrão visitor para Constante
-func (c *Constante) Aceitar(visitante Visitante) interface{} {
-	return visitante.VisitarConstante(c)
+func (c *Constante) Aceitar(node Node) interface{} {
+	return node.Constante(c)
 }
 
 // String retorna representação em string da constante
@@ -37,8 +37,8 @@ type OperacaoBinaria struct {
 }
 
 // Aceitar implementa o padrão visitor para OperacaoBinaria
-func (o *OperacaoBinaria) Aceitar(visitante Visitante) interface{} {
-	return visitante.VisitarOperacaoBinaria(o)
+func (o *OperacaoBinaria) Aceitar(node Node) interface{} {
+	return node.OperacaoBinaria(o)
 }
 
 // String retorna representação em string da operação
@@ -75,8 +75,8 @@ func (t TipoOperador) String() string {
 	}
 }
 
-// Visitante define a interface para o padrão visitor
-type Visitante interface {
-	VisitarConstante(constante *Constante) interface{}
-	VisitarOperacaoBinaria(operacao *OperacaoBinaria) interface{}
+// Node define a interface
+type Node interface {
+	Constante(constante *Constante) interface{}
+	OperacaoBinaria(operacao *OperacaoBinaria) interface{}
 }

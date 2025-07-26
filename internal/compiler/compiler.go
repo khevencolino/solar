@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/khevencolino/Kite/internal/lexer"
 	"github.com/khevencolino/Kite/internal/parser"
@@ -48,32 +47,34 @@ func (c *Compiler) CompilarArquivo(arquivoEntrada string) error {
 		return err
 	}
 
-	// ADICIONAR: Visualizar árvore
+	// Imprime a arvore
 	visualizador := parser.NovoVisualizador()
 	visualizador.ImprimirArvore(ast)
 
+	// Roda o interpretador sobre a arvore
 	resultado, err := c.interpretador.Interpretar(ast)
 	if err != nil {
 		return err
 	}
+
 	fmt.Printf("Resultado da expressão: %d\n", resultado)
 
-	// Extrai o primeiro número (lógica temporária)
-	primeiroNumero, err := c.extrairPrimeiroNumero(tokens)
-	if err != nil {
-		return err
-	}
+	// // Extrai o primeiro número (lógica temporária)
+	// primeiroNumero, err := c.extrairPrimeiroNumero(tokens)
+	// if err != nil {
+	// 	return err
+	// }
 
-	// Gera código assembly
-	assembly := c.gerador.GerarAssembly(primeiroNumero)
+	// // Gera código assembly, defasado desde atv02
+	// assembly := c.gerador.GerarAssembly(primeiroNumero)
 
-	// Escreve arquivo de saída
-	arquivoSaida := filepath.Join("result", "saida.s")
-	if err := utils.EscreverArquivo(arquivoSaida, assembly); err != nil {
-		return err
-	}
+	// // Escreve arquivo de saída
+	// arquivoSaida := filepath.Join("result", "saida.s")
+	// if err := utils.EscreverArquivo(arquivoSaida, assembly); err != nil {
+	// 	return err
+	// }
 
-	fmt.Printf("Código assembly escrito em '%s'\n", arquivoSaida)
+	// fmt.Printf("Código assembly escrito em '%s'\n", arquivoSaida)
 	return nil
 }
 

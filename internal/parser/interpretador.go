@@ -20,12 +20,12 @@ func (i *Interpretador) Interpretar(expressao Expressao) (int, error) {
 }
 
 // VisitarConstante implementa visitor para constantes
-func (i *Interpretador) VisitarConstante(constante *Constante) interface{} {
+func (i *Interpretador) Constante(constante *Constante) interface{} {
 	return constante.Valor
 }
 
 // VisitarOperacaoBinaria implementa visitor para operações binárias
-func (i *Interpretador) VisitarOperacaoBinaria(operacao *OperacaoBinaria) interface{} {
+func (i *Interpretador) OperacaoBinaria(operacao *OperacaoBinaria) interface{} {
 	// Interpreta operando esquerdo
 	esquerdoInterface := operacao.OperandoEsquerdo.Aceitar(i)
 	if erro, ok := esquerdoInterface.(error); ok {
