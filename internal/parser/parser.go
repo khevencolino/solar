@@ -46,7 +46,7 @@ func (p *Parser) analisarStatement() (Expressao, error) {
 	token := p.proximoToken()
 
 	if token.Type == lexer.IDENTIFIER {
-		if token.Type == lexer.ASSIGN {
+		if p.tokenAtual().Type == lexer.ASSIGN {
 			p.proximoToken()
 			valor, err := p.analisarStatement()
 			if err != nil {
@@ -105,7 +105,7 @@ func (p *Parser) analisarStatement() (Expressao, error) {
 			"expressão inválida",
 			token.Position.Line,
 			token.Position.Column,
-			fmt.Sprintf("esperado número ou '(', encontrado '%s'", token.Value),
+			fmt.Sprintf("esperado número, variável ou '(', encontrado '%s'", token.Value),
 		)
 	}
 }
