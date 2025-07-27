@@ -1,17 +1,22 @@
 package parser
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/khevencolino/Kite/internal/utils"
 )
 
 // Interpretador executa a árvore sintática
-type Interpretador struct{}
+type Interpretador struct {
+	variaveis map[string]int
+}
 
 // NovoInterpretador cria um novo interpretador
 func NovoInterpretador() *Interpretador {
-	return &Interpretador{}
+	return &Interpretador{
+		variaveis: make(map[string]int),
+	}
 }
 
 // Interpretar executa uma expressão e retorna o resultado
@@ -72,4 +77,30 @@ func (i *Interpretador) OperacaoBinaria(operacao *OperacaoBinaria) interface{} {
 			"",
 		)
 	}
+}
+
+func (i *Interpretador) Variavel(variavel *Variavel) interface{} {
+	valor, existe := i.variaveis[variavel.Nome]
+	if !existe {
+		return utils.NovoErro(
+			fmt.Sprintf("variável '%s' não definida", variavel.Nome),
+			variavel.Token.Position.Line,
+			variavel.Token.Position.Column,
+			"",
+		)
+	}
+	return valor
+}
+
+func (i *Interpretador) Atribuicao(atribuicao *Atribuicao) any {
+	// Avalia o valor da expressão
+	valorInterface := atribuicao.Valor.Aceitar(i)
+	if erro, ok := valorInterface.(error); ok {
+		return erro
+	}
+	valor := valorInterface.(int)
+
+	// Armazena na tabela de símbolos
+	i.variaveis[atribuicao.Nome] = valor
+	return valor
 }

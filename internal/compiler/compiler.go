@@ -42,22 +42,30 @@ func (c *Compiler) CompilarArquivo(arquivoEntrada string) error {
 	fmt.Printf("Tokens encontrados:\n")
 	lexer.ImprimirTokens(tokens)
 
-	ast, err := c.analisarSintaxe(tokens)
+	statements, err := c.analisarSintaxe(tokens)
 	if err != nil {
 		return err
 	}
 
-	// Imprime a arvore
-	visualizador := parser.NovoVisualizador()
-	visualizador.ImprimirArvore(ast)
+	var ultimoResultado any
+	for i, stmt := range statements {
+		fmt.Printf("\n--- Statement %d ---\n", i+1)
 
-	// Roda o interpretador sobre a arvore
-	resultado, err := c.interpretador.Interpretar(ast)
-	if err != nil {
-		return err
+		// Imprime a árvore
+		visualizador := parser.NovoVisualizador()
+		visualizador.ImprimirArvore(stmt)
+
+		// Interpreta
+		resultado, err := c.interpretador.Interpretar(stmt)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("Resultado: %d\n", resultado)
+		ultimoResultado = resultado
 	}
 
-	fmt.Println("Resultado da expressão: ", resultado)
+	fmt.Printf("\nResultado final: %d\n", ultimoResultado)
 
 	// // Extrai o primeiro número (lógica temporária)
 	// primeiroNumero, err := c.extrairPrimeiroNumero(tokens)
@@ -94,17 +102,7 @@ func (c *Compiler) tokenizar(conteudo string) ([]lexer.Token, error) {
 	return tokens, nil
 }
 
-// extrairPrimeiroNumero extrai o primeiro número dos tokens (temporário)
-func (c *Compiler) extrairPrimeiroNumero(tokens []lexer.Token) (string, error) {
-	for _, token := range tokens {
-		if token.ENumero() {
-			return token.Value, nil
-		}
-	}
-	return "", utils.NovoErro("nenhum número encontrado", 0, 0, "")
-}
-
-func (c *Compiler) analisarSintaxe(tokens []lexer.Token) (parser.Expressao, error) {
+func (c *Compiler) analisarSintaxe(tokens []lexer.Token) ([]parser.Expressao, error) {
 	c.parser = parser.NovoParser(tokens)
 	return c.parser.AnalisarPrograma()
 }

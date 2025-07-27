@@ -15,7 +15,9 @@ const (
 	DIVIDE                      // Operador de divisão
 	LPAREN                      // Parêntese esquerdo (()
 	RPAREN                      // Parêntese direito ())
+	ASSIGN                      // Assign para variavel ~>
 	COMMENT                     // Comentarios
+	IDENTIFIER                  // Identificador da variavel
 	WHITESPACE                  // Espaços em branco
 	EOF                         // Fim do arquivo
 	INVALID                     // Token inválido
@@ -46,6 +48,10 @@ func (t TokenType) String() string {
 		return "COMMENT"
 	case EOF:
 		return "EOF"
+	case ASSIGN:
+		return "ASSIGN"
+	case IDENTIFIER:
+		return "IDENTIFIER"
 	case INVALID:
 		return "INVALID"
 	default:
