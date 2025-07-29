@@ -32,29 +32,62 @@ all: build
 
 # Exibe as opções disponíveis
 help:
-	@echo "Makefile para o Compilador Kite"
-	@echo "================================"
+	@echo "Makefile para o Compilador Kite - Sistema de Backends Múltiplos"
+	@echo "================================================================="
 	@echo ""
-	@echo "🏗️  Compilação Local:"
-	@echo "  make build                     - Constrói o executável do compilador Go"
-	@echo "  make run INPUT_FILE=<path>     - Executa o compilador Go localmente"
-	@echo "  make assemble                  - Monta e linka o 'saida.s' gerado com 'runtime.s'"
+	@echo "🏗️  Compilação:"
+	@echo "  make build                              - Constrói o compilador"
 	@echo ""
-	@echo "🐳 Docker:"
-	@echo "  make docker-build              - Constrói a imagem Docker do compilador"
-	@echo "  make docker-run INPUT_FILE=<path> - Executa o compilador em container Docker"
-	@echo "  make docker-clean              - Remove imagens e containers Docker"
+	@echo "🚀 Execução:"
+	@echo "  make run INPUT_FILE=<arquivo>           - Executa com interpretador (padrão)"
+	@echo "  make run INPUT_FILE=<arquivo> BACKEND=<backend> - Executa com backend específico"
 	@echo ""
-	@echo "🧪 Utilitários:"
-	@echo "  make deps                      - Instala/atualiza dependências"
-	@echo "  make clean                     - Remove arquivos gerados"
+	@echo "🎯 Atalhos por Backend:"
+	@echo "  make run-interpreter INPUT_FILE=<arquivo> - Interpretação direta da AST"
+	@echo "  make run-bytecode INPUT_FILE=<arquivo>    - Bytecode + Virtual Machine"
+	@echo "  make run-assembly INPUT_FILE=<arquivo>    - Assembly x86-64 nativo"
+	@echo ""
+	@echo "🔍 Análise:"
+	@echo "  make compare INPUT_FILE=<arquivo>       - Compara todos os backends"
 	@echo ""
 	@echo "💡 Exemplos:"
-	@echo "  make run INPUT_FILE=examples/math.kite"
-	@echo "  make docker-run INPUT_FILE=examples/math.kite"
+	@echo "  make run INPUT_FILE=exemplos/variaveis/valido.kite"
+	@echo "  make run INPUT_FILE=exemplos/variaveis/valido.kite BACKEND=bytecode"
+	@echo "  make run-assembly INPUT_FILE=exemplos/aninhados/valido.kite"
+	@echo "  make compare INPUT_FILE=exemplos/variaveis/valido.kite"
 
 # --- Alvos Locais ---
 
+
+compare: build
+ifndef INPUT_FILE
+	@echo "❌ Erro: INPUT_FILE não está definido"
+	@exit 1
+endif
+	@echo "🔍 INTERPRETADOR:"
+	@echo "===================="
+	@./$(COMPILER_NAME) $(INPUT_FILE) interpreter
+	@echo ""
+	@echo "🤖 BYTECODE + VM:"
+	@echo "===================="
+	@./$(COMPILER_NAME) $(INPUT_FILE) bytecode
+	@echo ""
+	@echo "🔧 ASSEMBLY x86-64:"
+	@echo "===================="
+	@./$(COMPILER_NAME) $(INPUT_FILE) assembly
+
+
+	run-interpreter: build
+		@echo "🔍 Executando com Interpretador AST..."
+		./$(COMPILER_NAME) $(INPUT_FILE) interpreter
+
+run-bytecode: build
+		@echo "🤖 Executando com Bytecode + VM..."
+		./$(COMPILER_NAME) $(INPUT_FILE) bytecode
+
+run-assembly: build
+		@echo "🔧 Executando com Assembly x86-64..."
+		./$(COMPILER_NAME) $(INPUT_FILE) assembly
 # Verifica se Go está instalado
 check-go:
 	@which go > /dev/null || (echo "❌ Go não está instalado. Visite https://golang.org/doc/install" && exit 1)
@@ -79,17 +112,12 @@ build: check-go deps
 run: build
 ifndef INPUT_FILE
 	@echo "❌ Erro: INPUT_FILE não está definido"
-	@echo "📖 Uso: make run INPUT_FILE=<caminho/para/seu/programa.kite>"
-	@echo "📖 Exemplo: make run INPUT_FILE=examples/math.kite"
+	@echo "📖 Uso: make run INPUT_FILE=<arquivo> [BACKEND=<backend>]"
+	@echo "📖 Exemplo: make run INPUT_FILE=exemplos/variaveis/valido.kite"
 	@exit 1
 endif
-	@echo "🚀 Executando compilador em $(INPUT_FILE)..."
-	@if [ ! -f "$(INPUT_FILE)" ]; then \
-		echo "❌ Erro: Arquivo $(INPUT_FILE) não encontrado"; \
-		exit 1; \
-	fi
-	./$(COMPILER_NAME) $(INPUT_FILE)
-	@echo "✅ Assembly gerado: $(OUTPUT_ASM)"
+	@echo "🚀 Executando compilador..."
+	./$(COMPILER_NAME) $(INPUT_FILE) $(or $(BACKEND),interpreter)
 
 # Monta o arquivo assembly gerado (saida.s) e o linka com runtime.s
 assemble: $(OUTPUT_ASM) $(RUNTIME_S)
