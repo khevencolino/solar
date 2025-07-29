@@ -132,11 +132,16 @@ func (a *AssemblyBackend) compilarAssembly(arquivoAssembly string) error {
 	fmt.Printf("🧑‍💻 Criando arquivo executavel...\n")
 	fmt.Printf("🔗 Linkando com runtime...\n")
 
-	executavel := filepath.Join("result", "programa")
-	cmd := exec.Command("gcc", "-o", executavel, arquivoAssembly)
+	objectFile := filepath.Join("result", "programa.o")
+	cmdAs := exec.Command("as", "-o", objectFile, arquivoAssembly)
+	if err := cmdAs.Run(); err != nil {
+		return fmt.Errorf("erro ao montar (as): %v", err)
+	}
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("erro ao compilar assembly: %v", err)
+	executavel := filepath.Join("result", "programa")
+	cmdLd := exec.Command("ld", "-o", executavel, objectFile)
+	if err := cmdLd.Run(); err != nil {
+		return fmt.Errorf("erro ao ligar (ld): %v", err)
 	}
 
 	fmt.Printf("✅ Executável gerado: %s\n", executavel)

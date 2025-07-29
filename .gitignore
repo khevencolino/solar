@@ -1,3 +1,4 @@
 .DS_Store
 result/saida.s
 kite-compiler
+result/
