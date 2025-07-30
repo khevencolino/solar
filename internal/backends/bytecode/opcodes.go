@@ -13,6 +13,7 @@ const (
 	OP_STORE               // STORE variavel_index
 	OP_PRINT               // PRINT
 	OP_HALT                // HALT
+	OP_POW                 // POWER
 )
 
 type Instruction struct {
@@ -43,6 +44,8 @@ func (op OpCode) String() string {
 		return "PRINT"
 	case OP_HALT:
 		return "HALT"
+	case OP_POW:
+		return "POWER"
 	default:
 		return "UNKNOWN"
 	}

@@ -33,7 +33,7 @@ func (a *AssemblyBackend) Compile(statements []parser.Expressao) error {
 	// Processa statements
 	for i, stmt := range statements {
 		fmt.Printf("  Processando statement %d...\n", i+1)
-		a.visitarExpressao(stmt)
+		a.checarExpressao(stmt)
 
 		// Se for a última expressão, imprime resultado
 		if i == len(statements)-1 {
@@ -55,7 +55,7 @@ func (a *AssemblyBackend) Compile(statements []parser.Expressao) error {
 	return a.compilarAssembly(arquivoSaida)
 }
 
-func (a *AssemblyBackend) visitarExpressao(expr parser.Expressao) {
+func (a *AssemblyBackend) checarExpressao(expr parser.Expressao) {
 	switch e := expr.(type) {
 	case *parser.Constante:
 		a.output.WriteString(fmt.Sprintf("    mov $%d, %%rax\n", e.Valor))
@@ -65,16 +65,16 @@ func (a *AssemblyBackend) visitarExpressao(expr parser.Expressao) {
 
 	case *parser.Atribuicao:
 		a.declararVariavel(e.Nome)
-		a.visitarExpressao(e.Valor)
+		a.checarExpressao(e.Valor)
 		a.output.WriteString(fmt.Sprintf("    mov %%rax, %s(%%rip)\n", a.getVarName(e.Nome)))
 
 	case *parser.OperacaoBinaria:
 		// Operando esquerdo
-		a.visitarExpressao(e.OperandoEsquerdo)
+		a.checarExpressao(e.OperandoEsquerdo)
 		a.output.WriteString("    push %rax\n")
 
 		// Operando direito
-		a.visitarExpressao(e.OperandoDireito)
+		a.checarExpressao(e.OperandoDireito)
 		a.output.WriteString("    mov %rax, %rbx\n")
 		a.output.WriteString("    pop %rax\n")
 
@@ -89,7 +89,19 @@ func (a *AssemblyBackend) visitarExpressao(expr parser.Expressao) {
 		case parser.DIVISAO:
 			a.output.WriteString("    cqo\n")
 			a.output.WriteString("    idiv %rbx\n")
+		case parser.POWER:
+			a.output.WriteString("    mov %rax, %rcx\n")  // copia a base de %rax para %rcx (base temporária)
+			a.output.WriteString("    mov $1, %rax\n")    // inicializa o resultado em %rax com 1 (valor neutro da multiplicação)
+			a.output.WriteString("    test %rbx, %rbx\n") // verifica se o expoente (%rbx) é zero
+			a.output.WriteString("    jz .pow_done\n")    // se for zero, pula para o final (qualquer número^0 = 1)
+			a.output.WriteString(".pow_loop:\n")
+			a.output.WriteString("    imul %rax, %rcx\n") // multiplica resultado (%rax) pela base (%rcx)
+			a.output.WriteString("    dec %rbx\n")        // decrementa o expoente
+			a.output.WriteString("    jnz .pow_loop\n")   // se o expoente ainda não for zero, repete o loop
+			a.output.WriteString(".pow_done:\n")          // fim da exponenciação; %rax contém o resultado final
+
 		}
+
 	}
 }
 

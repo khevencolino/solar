@@ -2,6 +2,7 @@ package bytecode
 
 import (
 	"fmt"
+	"math"
 )
 
 type VM struct {
@@ -50,6 +51,11 @@ func (vm *VM) Execute(instructions []Instruction) error {
 			b := vm.pop()
 			a := vm.pop()
 			vm.push(a * b)
+
+		case OP_POW:
+			b := vm.pop()
+			a := vm.pop()
+			vm.push(int64(math.Pow(float64(b), float64(a))))
 
 		case OP_DIV:
 			b := vm.pop()

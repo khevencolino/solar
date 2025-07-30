@@ -69,6 +69,8 @@ func (b *BytecodeBackend) visitarExpressao(expr parser.Expressao) {
 			b.emit(OP_MUL, 0, e.Token.Position.Line)
 		case parser.DIVISAO:
 			b.emit(OP_DIV, 0, e.Token.Position.Line)
+		case parser.POWER:
+			b.emit(OP_POW, 0, e.Token.Position.Line)
 		}
 	}
 }
