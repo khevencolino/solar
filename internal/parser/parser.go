@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/khevencolino/Kite/internal/lexer"
-	"github.com/khevencolino/Kite/internal/utils"
+	"github.com/khevencolino/Solar/internal/lexer"
+	"github.com/khevencolino/Solar/internal/utils"
 )
 
 // Parser representa o analisador sintático
@@ -23,29 +23,40 @@ func NovoParser(tokens []lexer.Token) *Parser {
 }
 
 // AnalisarPrograma analisa um programa completo
-func (p *Parser) AnalisarPrograma() (Expressao, error) {
-	expressao, err := p.analisarExpressao()
-	if err != nil {
-		return nil, err
+func (p *Parser) AnalisarPrograma() ([]Expressao, error) {
+	var statements []Expressao
+
+	for !p.chegouAoFim() {
+		statement, err := p.analisarStatement()
+		if err != nil {
+			return nil, err
+		}
+		statements = append(statements, statement)
 	}
 
-	// Verifica se chegou ao fim da entrada
-	if !p.chegouAoFim() {
-		token := p.tokenAtual()
-		return nil, utils.NovoErro(
-			"tokens inesperados após expressão",
-			token.Position.Line,
-			token.Position.Column,
-			fmt.Sprintf("token: %s", token.Value),
-		)
+	if len(statements) == 0 {
+		return nil, utils.NovoErro("programa vazio", 0, 0, "")
 	}
 
-	return expressao, nil
+	return statements, nil
 }
 
 // analisarExpressao implementa a análise descendente recursiva para expressões
-func (p *Parser) analisarExpressao() (Expressao, error) {
+func (p *Parser) analisarStatement() (Expressao, error) {
 	token := p.proximoToken()
+
+	if token.Type == lexer.IDENTIFIER {
+		if p.tokenAtual().Type == lexer.ASSIGN {
+			p.proximoToken()
+			valor, err := p.analisarStatement()
+			if err != nil {
+				return nil, nil
+			}
+			return &Atribuicao{Nome: token.Value, Valor: valor, Token: token}, nil
+		} else {
+			return &Variavel{Nome: token.Value, Token: token}, nil
+		}
+	}
 
 	if token.Type == lexer.NUMBER {
 		// Caso: <expressao> ::= <literal-inteiro>
@@ -62,7 +73,7 @@ func (p *Parser) analisarExpressao() (Expressao, error) {
 
 	} else if token.Type == lexer.LPAREN {
 		// Caso: <expressao> ::= (<expressao> <operador> <expressao>)
-		operandoEsquerdo, err := p.analisarExpressao()
+		operandoEsquerdo, err := p.analisarStatement()
 		if err != nil {
 			return nil, err
 		}
@@ -72,7 +83,7 @@ func (p *Parser) analisarExpressao() (Expressao, error) {
 			return nil, err
 		}
 
-		operandoDireito, err := p.analisarExpressao()
+		operandoDireito, err := p.analisarStatement()
 		if err != nil {
 			return nil, err
 		}
@@ -94,7 +105,7 @@ func (p *Parser) analisarExpressao() (Expressao, error) {
 			"expressão inválida",
 			token.Position.Line,
 			token.Position.Column,
-			fmt.Sprintf("esperado número ou '(', encontrado '%s'", token.Value),
+			fmt.Sprintf("esperado número, variável ou '(', encontrado '%s'", token.Value),
 		)
 	}
 }

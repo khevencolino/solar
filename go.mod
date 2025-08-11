@@ -1,4 +1,4 @@
-module github.com/khevencolino/Kite
+module github.com/khevencolino/Solar
 
 go 1.24.4
 

@@ -1,6 +1,6 @@
-# Compilador Kite
+# Compilador Solar ☀️
 
-Um compilador experimental para a linguagem Kite, escrito em Go, que gera código assembly x86-64 com análise sintática completa e interpretação de expressões.
+Um compilador experimental para a linguagem Solar, escrito em Go, que gera código assembly x86-64 com análise sintática completa e interpretação de expressões.
 
 ## 📋 Índice
 
@@ -18,7 +18,7 @@ Um compilador experimental para a linguagem Kite, escrito em Go, que gera códig
 
 ## 🎯 Visão Geral
 
-O Kite é um compilador que converte código fonte da linguagem Kite em assembly x86-64. Atualmente suporta:
+O Solar é um compilador que converte código fonte da linguagem Solar em assembly x86-64. Atualmente suporta:
 
 - **Análise Léxica**: Tokenização de números e operadores matemáticos
 - **Parser**: Análise sintática com construção de AST
@@ -72,8 +72,8 @@ sudo pacman -S go base-devel binutils make
 
 ### Clonagem do Repositório
 ```bash
-git clone https://github.com/khevencolino/Kite.git
-cd Kite
+git clone https://github.com/khevencolino/Solar.git
+cd Solar
 ```
 
 ### Build Local
@@ -82,7 +82,7 @@ cd Kite
 make build
 
 # Ou manualmente
-go build -o kite-compiler ./main.go
+go build -o solar-compiler ./main.go
 ```
 
 ### Build com Docker
@@ -94,18 +94,18 @@ make docker-build
 
 ### Uso Básico
 
-1. **Criar um arquivo `.kite`**:
+1. **Criar um arquivo `.solar`**:
 ```bash
-echo "123" > meu_programa.kite
+echo "123" > meu_programa.solar
 ```
 
 2. **Compilar e Interpretar**:
 ```bash
 # Local
-make run INPUT_FILE=meu_programa.kite
+make run INPUT_FILE=meu_programa.solar
 
 # Docker
-make docker-run INPUT_FILE=meu_programa.kite
+make docker-run INPUT_FILE=meu_programa.solar
 ```
 
 3. **Montar e executar** (assembly desabilitado temporariamente):
@@ -120,16 +120,16 @@ make assemble
 ### Fluxo Completo
 ```bash
 # Compilar + Interpretar em um comando
-make run INPUT_FILE=meu_programa.kite
+make run INPUT_FILE=meu_programa.solar
 
 # Com Docker
-make docker-run INPUT_FILE=meu_programa.kite
+make docker-run INPUT_FILE=meu_programa.solar
 ```
 
 ### Linha de Comando Direta
 ```bash
 # Depois do build
-./kite-compiler meu_programa.kite
+./solar-compiler meu_programa.solar
 
 # Mostra tokens, AST e resultado da interpretação
 ```
@@ -137,14 +137,14 @@ make docker-run INPUT_FILE=meu_programa.kite
 ## 🧪 Exemplos
 
 ### Exemplo 1: Número Simples
-**Arquivo**: `exemplos/stage01/valido.kite`
+**Arquivo**: `exemplos/stage01/valido.solar`
 ```
 123
 ```
 
 **Compilação**:
 ```bash
-make run INPUT_FILE=exemplos/stage01/valido.kite
+make run INPUT_FILE=exemplos/stage01/valido.solar
 ```
 
 **Saída esperada**:
@@ -162,14 +162,14 @@ Resultado da expressão: 123
 ```
 
 ### Exemplo 2: Expressão com Parênteses
-**Arquivo**: `exemplos/stage02/valido.kite`
+**Arquivo**: `exemplos/stage02/valido.solar`
 ```
 (11 + 2)
 ```
 
 **Compilação**:
 ```bash
-make run INPUT_FILE=exemplos/stage02/valido.kite
+make run INPUT_FILE=exemplos/stage02/valido.solar
 ```
 
 **Saída esperada**:
@@ -193,7 +193,7 @@ Resultado da expressão: 13
 ```
 
 ### Exemplo 3: Expressão Inválida
-**Arquivo**: `exemplos/stage02/invalido.kite`
+**Arquivo**: `exemplos/stage02/invalido.solar`
 ```
 (11 + A + 23 + B)
 ```
@@ -203,38 +203,38 @@ Resultado da expressão: 13
 ### Testando Exemplos
 ```bash
 # Testar arquivo válido do stage 1
-make run INPUT_FILE=exemplos/stage01/valido.kite
+make run INPUT_FILE=exemplos/stage01/valido.solar
 
 # Testar arquivo inválido do stage 1
-make run INPUT_FILE=exemplos/stage01/invalido.kite
+make run INPUT_FILE=exemplos/stage01/invalido.solar
 
 # Testar arquivo válido do stage 2
-make run INPUT_FILE=exemplos/stage02/valido.kite
+make run INPUT_FILE=exemplos/stage02/valido.solar
 
 # Testar arquivo inválido do stage 2
-make run INPUT_FILE=exemplos/stage02/invalido.kite
+make run INPUT_FILE=exemplos/stage02/invalido.solar
 ```
 
 ### Exemplos Avançados (Stage 3)
 ```bash
 # Testar expressão complexa válida
-make run INPUT_FILE=exemplos/stage03/valido.kite
+make run INPUT_FILE=exemplos/stage03/valido.solar
 
 # Testar expressão com erro de sintaxe
-make run INPUT_FILE=exemplos/stage03/invalido.kite
+make run INPUT_FILE=exemplos/stage03/invalido.solar
 ```
 
 ## 🌳 Análise Sintática e Interpretação
 
 ### Exemplo Completo com AST
-**Arquivo**: `exemplos/stage03/valido.kite`
+**Arquivo**: `exemplos/stage03/valido.solar`
 ```
 ((11 + 2) + (8 * 9))
 ```
 
 **Compilação**:
 ```bash
-make run INPUT_FILE=exemplos/stage03/valido.kite
+make run INPUT_FILE=exemplos/stage03/valido.solar
 ```
 
 **Saída esperada**:
@@ -270,7 +270,7 @@ Resultado da expressão: 85
 ```
 
 ### Exemplo com Erro de Sintaxe
-**Arquivo**: `exemplos/stage03/invalido.kite`
+**Arquivo**: `exemplos/stage03/invalido.solar`
 ```
 (11 + 2))
 ```
@@ -280,9 +280,9 @@ Resultado da expressão: 85
 ## 📁 Estrutura do Projeto
 
 ```
-Kite/
+Solar/
 ├── cmd/compiler/main.go          # Ponto de entrada alternativo
-├── exemplos/                     # Exemplos de código Kite
+├── exemplos/                     # Exemplos de código Solar
 │   ├── stage01/                  # Números simples
 │   ├── stage02/                  # Expressões com parênteses
 │   └── stage03/                  # Expressões complexas aninhadas
@@ -356,7 +356,7 @@ make info                         # Informações do projeto
 O compilador mostra informações detalhadas durante a execução:
 
 ```bash
-make run INPUT_FILE=exemplos/stage03/valido.kite
+make run INPUT_FILE=exemplos/stage03/valido.solar
 ```
 
 **Saída de exemplo**:
@@ -387,10 +387,10 @@ Resultado da expressão: 13
 make docker-build
 
 # Executar compilador
-make docker-run INPUT_FILE=exemplos/stage01/valido.kite
+make docker-run INPUT_FILE=exemplos/stage01/valido.solar
 
 # Execução completa
-make docker-run-complete INPUT_FILE=exemplos/stage01/valido.kite
+make docker-run-complete INPUT_FILE=exemplos/stage01/valido.solar
 
 # Limpeza
 make docker-clean
@@ -399,11 +399,11 @@ make docker-clean
 ### Uso Manual do Docker
 ```bash
 # Build
-docker build -t kite-compiler .
+docker build -t solar-compiler .
 
 # Executar
 docker run --rm -v $(pwd):/workspace -w /workspace \
-  kite-compiler ./kite-compiler exemplos/stage01/valido.kite
+  solar-compiler ./solar-compiler exemplos/stage01/valido.solar
 ```
 
 ## 🏗️ Arquitetura
@@ -474,7 +474,7 @@ Este projeto está sob licença GPL-3.0. Veja o arquivo `LICENSE` para mais deta
 ## 📞 Suporte
 
 Para dúvidas e problemas:
-- Abra uma [Issue](https://github.com/khevencolino/Kite/issues)
+- Abra uma [Issue](https://github.com/khevencolino/Solar/issues)
 - Consulte a documentação dos comandos: `make help`
 
 ---

@@ -3,82 +3,81 @@ package compiler
 import (
 	"fmt"
 
-	"github.com/khevencolino/Kite/internal/lexer"
-	"github.com/khevencolino/Kite/internal/parser"
-	"github.com/khevencolino/Kite/internal/utils"
+	"github.com/khevencolino/Solar/internal/backends"
+	"github.com/khevencolino/Solar/internal/backends/assembly"
+	"github.com/khevencolino/Solar/internal/backends/bytecode"
+	"github.com/khevencolino/Solar/internal/backends/interpreter"
+	"github.com/khevencolino/Solar/internal/lexer"
+	"github.com/khevencolino/Solar/internal/parser"
+	"github.com/khevencolino/Solar/internal/utils"
 )
 
-// Compiler representa o compilador principal
 type Compiler struct {
-	lexer         *lexer.Lexer          // Analisador léxico
-	gerador       *Generator            // Gerador de código
-	parser        *parser.Parser        // Parser
-	interpretador *parser.Interpretador // Interpretador
+	lexer  *lexer.Lexer
+	parser *parser.Parser
 }
 
-// NovoCompilador cria um novo compilador
 func NovoCompilador() *Compiler {
-	return &Compiler{
-		gerador:       NovoGerador(),
-		interpretador: parser.NovoInterpretador(),
-	}
+	return &Compiler{}
 }
 
-// CompilarArquivo compila um arquivo fonte
-func (c *Compiler) CompilarArquivo(arquivoEntrada string) error {
-	// Lê o arquivo de entrada
+func (c *Compiler) CompilarArquivo(arquivoEntrada string, backendType string) error {
+	// Lê o arquivo
 	conteudo, err := utils.LerArquivo(arquivoEntrada)
 	if err != nil {
 		return err
 	}
 
-	// Realiza análise léxica
+	// Análise léxica
 	tokens, err := c.tokenizar(conteudo)
 	if err != nil {
 		return err
 	}
 
-	// Imprime tokens para depuração
+	// Imprime tokens
 	fmt.Printf("Tokens encontrados:\n")
 	lexer.ImprimirTokens(tokens)
+	fmt.Println()
 
-	ast, err := c.analisarSintaxe(tokens)
+	// Análise sintática
+	statements, err := c.analisarSintaxe(tokens)
 	if err != nil {
 		return err
 	}
 
-	// Imprime a arvore
-	visualizador := parser.NovoVisualizador()
-	visualizador.ImprimirArvore(ast)
-
-	// Roda o interpretador sobre a arvore
-	resultado, err := c.interpretador.Interpretar(ast)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("Resultado da expressão: ", resultado)
-
-	// // Extrai o primeiro número (lógica temporária)
-	// primeiroNumero, err := c.extrairPrimeiroNumero(tokens)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// // Gera código assembly, defasado desde atv02
-	// assembly := c.gerador.GerarAssembly(primeiroNumero)
-
-	// // Escreve arquivo de saída
-	// arquivoSaida := filepath.Join("result", "saida.s")
-	// if err := utils.EscreverArquivo(arquivoSaida, assembly); err != nil {
-	// 	return err
-	// }
-
-	// fmt.Printf("Código assembly escrito em '%s'\n", arquivoSaida)
-	return nil
+	// Seleciona e executa backend
+	return c.executarBackend(statements, backendType)
 }
 
-// tokenizar realiza análise léxica
+func (c *Compiler) executarBackend(statements []parser.Expressao, backendType string) error {
+	var backend backends.Backend
+
+	switch backendType {
+	case "interpreter", "interp", "ast":
+		backend = interpreter.NewInterpreterBackend()
+
+	case "bytecode", "vm", "bc":
+		backend = bytecode.NewBytecodeBackend()
+
+	case "assembly", "asm", "native":
+		backend = assembly.NewAssemblyBackend()
+
+	default:
+		return fmt.Errorf(`backend desconhecido: %s
+
+Backends disponíveis:
+  interpreter, interp, ast  - Interpretação direta da AST (padrão)
+  bytecode, vm, bc         - Compilação para Bytecode + VM
+  assembly, asm, native    - Compilação para Assembly x86-64
+
+Exemplo: ./solar-compiler programa.solar interpreter`, backendType)
+	}
+
+	fmt.Printf("🎯 Backend selecionado: %s\n\n", backend.GetName())
+
+	return backend.Compile(statements)
+}
+
 func (c *Compiler) tokenizar(conteudo string) ([]lexer.Token, error) {
 	c.lexer = lexer.NovoLexer(conteudo)
 	tokens, err := c.lexer.Tokenizar()
@@ -86,7 +85,6 @@ func (c *Compiler) tokenizar(conteudo string) ([]lexer.Token, error) {
 		return nil, err
 	}
 
-	// Valida a expressão
 	if err := c.lexer.ValidarExpressao(tokens); err != nil {
 		return nil, err
 	}
@@ -94,17 +92,7 @@ func (c *Compiler) tokenizar(conteudo string) ([]lexer.Token, error) {
 	return tokens, nil
 }
 
-// extrairPrimeiroNumero extrai o primeiro número dos tokens (temporário)
-func (c *Compiler) extrairPrimeiroNumero(tokens []lexer.Token) (string, error) {
-	for _, token := range tokens {
-		if token.ENumero() {
-			return token.Value, nil
-		}
-	}
-	return "", utils.NovoErro("nenhum número encontrado", 0, 0, "")
-}
-
-func (c *Compiler) analisarSintaxe(tokens []lexer.Token) (parser.Expressao, error) {
+func (c *Compiler) analisarSintaxe(tokens []lexer.Token) ([]parser.Expressao, error) {
 	c.parser = parser.NovoParser(tokens)
 	return c.parser.AnalisarPrograma()
 }

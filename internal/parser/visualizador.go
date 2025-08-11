@@ -53,21 +53,27 @@ func (v *VisualizadorArvore) ImprimirArvore(expressao Expressao) {
 func (v *VisualizadorArvore) criarArvoreRecursiva(expressao Expressao) *tree.Tree {
 	switch expr := expressao.(type) {
 	case *Constante:
-		// Folha da árvore: apenas o número
 		return tree.NewTree(tree.NodeString(strconv.Itoa(expr.Valor)))
 
-	case *OperacaoBinaria:
-		// Nó interno: operador com dois filhos
-		arvore := tree.NewTree(tree.NodeString(expr.Operador.String()))
+	case *Variavel:
+		return tree.NewTree(tree.NodeString(expr.Nome))
 
-		// Cria subárvores para os operandos
+	case *Atribuicao:
+		arvore := tree.NewTree(tree.NodeString("~>"))
+		subarvoreNome := tree.NewTree(tree.NodeString(expr.Nome))
+		subarvoreValor := v.criarArvoreRecursiva(expr.Valor)
+
+		v.adicionarSubarvore(arvore, subarvoreNome)
+		v.adicionarSubarvore(arvore, subarvoreValor)
+		return arvore
+
+	case *OperacaoBinaria:
+		arvore := tree.NewTree(tree.NodeString(expr.Operador.String()))
 		subarvoreEsquerda := v.criarArvoreRecursiva(expr.OperandoEsquerdo)
 		subarvoreDireita := v.criarArvoreRecursiva(expr.OperandoDireito)
 
-		// Adiciona os valores das subárvores como filhos
 		v.adicionarSubarvore(arvore, subarvoreEsquerda)
 		v.adicionarSubarvore(arvore, subarvoreDireita)
-
 		return arvore
 
 	default:

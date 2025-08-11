@@ -3,13 +3,42 @@ package parser
 import (
 	"fmt"
 
-	"github.com/khevencolino/Kite/internal/lexer"
+	"github.com/khevencolino/Solar/internal/lexer"
 )
 
 // Expressao representa a interface base para todos os nós da AST
 type Expressao interface {
-	Aceitar(node Node) interface{}
+	Aceitar(node Node) any
 	String() string
+}
+
+// Variavel representa uma variavel na árvore
+type Variavel struct {
+	Nome  string
+	Token lexer.Token
+}
+
+func (v *Variavel) Aceitar(node Node) interface{} {
+	return node.Variavel(v)
+}
+
+func (v *Variavel) String() string {
+	return v.Nome
+}
+
+// Atribuicao representa uma atribuicao na árvore
+type Atribuicao struct {
+	Nome  string
+	Valor Expressao
+	Token lexer.Token
+}
+
+func (a *Atribuicao) Aceitar(node Node) interface{} {
+	return node.Atribuicao(a)
+}
+
+func (a *Atribuicao) String() string {
+	return fmt.Sprintf("%s = %s", a.Nome, a.Valor.String())
 }
 
 // Constante representa um literal inteiro na árvore
@@ -82,4 +111,6 @@ func (t TipoOperador) String() string {
 type Node interface {
 	Constante(constante *Constante) interface{}
 	OperacaoBinaria(operacao *OperacaoBinaria) interface{}
+	Variavel(variavel *Variavel) interface{}
+	Atribuicao(atribuicao *Atribuicao) interface{}
 }

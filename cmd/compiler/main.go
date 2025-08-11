@@ -4,36 +4,84 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/khevencolino/Kite/internal/compiler"
-	"github.com/khevencolino/Kite/internal/utils"
+	"github.com/khevencolino/Solar/internal/compiler"
 )
 
 func main() {
-	// Processa argumentos da linha de comando
-	arquivoEntrada, err := processarArgumentos()
+	arquivoEntrada, backend, showHelp, err := processarArgumentos()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Erro: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Cria uma instância do compilador
+	if showHelp {
+		mostrarAjuda()
+		return
+	}
+
 	compilador := compiler.NovoCompilador()
 
-	// Compila o arquivo de entrada
-	if err := compilador.CompilarArquivo(arquivoEntrada); err != nil {
-		fmt.Fprintf(os.Stderr, "Erro de compilação: %v\n", err)
+	if err := compilador.CompilarArquivo(arquivoEntrada, backend); err != nil {
+		fmt.Fprintf(os.Stderr, "❌ Erro de compilação: %v\n", err)
 		os.Exit(1)
 	}
-
-	fmt.Printf("Compilação concluída com sucesso!\n")
 }
 
-// processarArgumentos processa os argumentos da linha de comando
-func processarArgumentos() (string, error) {
+func processarArgumentos() (string, string, bool, error) {
 	args := os.Args
+
 	if len(args) < 2 {
-		return "", utils.NovoErro("argumentos insuficientes", 0, 0,
-			fmt.Sprintf("Uso: %s <arquivo_de_entrada>\nExemplo: %s programa.kite", args[0], args[0]))
+		return "", "", false, fmt.Errorf("argumentos insuficientes")
 	}
-	return args[1], nil
+
+	// Verifica help
+	if args[1] == "--help" || args[1] == "-h" {
+		return "", "", true, nil
+	}
+
+	arquivo := args[1]
+	backend := "interpreter"
+
+	if len(args) >= 3 {
+		backend = args[2]
+	}
+
+	return arquivo, backend, false, nil
+}
+
+func mostrarAjuda() {
+	fmt.Printf(`Compilador Solar - Sistema de Backends Múltiplos
+
+USO:
+    solar-compiler <arquivo> [backend]
+
+BACKENDS DISPONÍVEIS:
+
+🔍 interpreter, interp, ast (PADRÃO)
+   - Interpretação direta da AST
+   - Mais rápido para desenvolvimento e debug
+   - Mostra árvore sintática
+
+🤖 bytecode, vm, bc
+   - Compilação para bytecode + Virtual Machine
+   - Mostra instruções geradas
+   - Boa performance, fácil debug
+
+🔧 assembly, asm, native
+   - Compilação para Assembly x86-64 nativo
+   - Gera executável standalone*
+   - Máxima performance
+
+EXEMPLOS:
+    solar-compiler programa.solar                    # Usa interpretador (padrão)
+    solar-compiler programa.solar interpreter        # Interpretação direta
+    solar-compiler programa.solar bytecode           # Bytecode + VM
+    solar-compiler programa.solar assembly           # Assembly nativo
+
+ARQUIVOS DE TESTE:
+    exemplos/constante/valido.solar                 # Número simples
+    exemplos/operadores/valido.solar                # Expressões
+    exemplos/variaveis/valido.solar                 # Variáveis
+    exemplos/aninhados/valido.solar                 # Expressões complexas
+`)
 }

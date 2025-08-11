@@ -29,16 +29,18 @@ func NovoLexer(entrada string) *Lexer {
 // inicializarPadroes inicializa os padrões regex para cada tipo de token
 func (l *Lexer) inicializarPadroes() {
 	l.padroes = map[TokenType]*regexp.Regexp{
-		NUMBER:     regexp.MustCompile(`^\d+`),  // Números: 123, 456
-		PLUS:       regexp.MustCompile(`^\+`),   // Adição: +
-		MINUS:      regexp.MustCompile(`^-`),    // Subtraço: -
-		MULTIPLY:   regexp.MustCompile(`^\*`),   // Multiplicação: *
-		POWER:      regexp.MustCompile(`^\*\*`), // Potência: **
-		DIVIDE:     regexp.MustCompile(`^/`),    // Divisão
-		LPAREN:     regexp.MustCompile(`^\(`),   // Parêntese esquerdo: (
-		RPAREN:     regexp.MustCompile(`^\)`),   // Parêntese direito: )
-		WHITESPACE: regexp.MustCompile(`^\s+`),  // Espaços em branco
-		COMMENT:    regexp.MustCompile(`^//.*`), // Comentarios //
+		NUMBER:     regexp.MustCompile(`^\d+`),                  // Números: 123, 456
+		PLUS:       regexp.MustCompile(`^\+`),                   // Adição: +
+		MINUS:      regexp.MustCompile(`^-`),                    // Subtraço: -
+		MULTIPLY:   regexp.MustCompile(`^\*`),                   // Multiplicação: *
+		POWER:      regexp.MustCompile(`^\*\*`),                 // Potência: **
+		DIVIDE:     regexp.MustCompile(`^/`),                    // Divisão
+		LPAREN:     regexp.MustCompile(`^\(`),                   // Parêntese esquerdo: (
+		RPAREN:     regexp.MustCompile(`^\)`),                   // Parêntese direito: )
+		ASSIGN:     regexp.MustCompile(`^~>`),                   // Simbolo para alocar variavel ~>
+		IDENTIFIER: regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*`), // Palavras permitidas para nomear variaveis
+		WHITESPACE: regexp.MustCompile(`^\s+`),                  // Espaços em branco
+		COMMENT:    regexp.MustCompile(`^//.*`),                 // Comentarios //
 	}
 }
 
@@ -75,7 +77,7 @@ func (l *Lexer) proximoToken() (Token, error) {
 	restante := l.entrada[l.posicao:]
 
 	// Tenta fazer match com cada padrão (ordem importa para ** vs *)
-	tiposToken := []TokenType{COMMENT, POWER, NUMBER, PLUS, MINUS, DIVIDE, MULTIPLY, LPAREN, RPAREN, WHITESPACE}
+	tiposToken := []TokenType{COMMENT, ASSIGN, IDENTIFIER, POWER, NUMBER, PLUS, MINUS, DIVIDE, MULTIPLY, LPAREN, RPAREN, WHITESPACE}
 
 	for _, tipoToken := range tiposToken {
 		if match := l.padroes[tipoToken].FindString(restante); match != "" {
