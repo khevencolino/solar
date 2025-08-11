@@ -127,37 +127,6 @@ func (l *Lexer) temMais() bool {
 	return l.posicao < len(l.entrada)
 }
 
-// ValidarExpressao valida se a expressão tem sintaxe correta
-func (l *Lexer) ValidarExpressao(tokens []Token) error {
-	if len(tokens) == 0 {
-		return fmt.Errorf("expressão vazia")
-	}
-
-	return validarParenteses(tokens)
-}
-
-// validarParenteses verifica se os parênteses estão balanceados
-func validarParenteses(tokens []Token) error {
-	contadorParenteses := 0
-	for _, token := range tokens {
-		switch token.Type {
-		case LPAREN:
-			contadorParenteses++
-		case RPAREN:
-			contadorParenteses--
-			if contadorParenteses < 0 {
-				return fmt.Errorf("parênteses não balanceados: ')' extra em %s", token.Position)
-			}
-		}
-	}
-
-	if contadorParenteses > 0 {
-		return fmt.Errorf("parênteses não balanceados: %d '(' sem ')' correspondente", contadorParenteses)
-	}
-
-	return nil
-}
-
 // ImprimirTokens imprime todos os tokens de forma formatada
 func ImprimirTokens(tokens []Token) {
 	fmt.Printf("%-10s %-15s %-20s\n", "TIPO", "VALOR", "POSIÇÃO")

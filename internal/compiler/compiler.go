@@ -85,10 +85,6 @@ func (c *Compiler) tokenizar(conteudo string) ([]lexer.Token, error) {
 		return nil, err
 	}
 
-	if err := c.lexer.ValidarExpressao(tokens); err != nil {
-		return nil, err
-	}
-
 	return tokens, nil
 }
 

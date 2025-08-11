@@ -151,12 +151,11 @@ func (p *Parser) proximoToken() lexer.Token {
 func (p *Parser) verificarProximoToken(tipoEsperado lexer.TokenType) error {
 	token := p.proximoToken()
 	if token.Type != tipoEsperado {
-		return utils.NovoErro(
-			"token inesperado",
-			token.Position.Line,
-			token.Position.Column,
-			fmt.Sprintf("esperado %s, encontrado %s", tipoEsperado, token.Type),
-		)
+		msg := fmt.Sprintf("esperado %s, encontrado %s", tipoEsperado, token.Type)
+		if token.Type == lexer.EOF {
+			msg += " — possível parêntese não fechado"
+		}
+		return utils.NovoErro("token inesperado", token.Position.Line, token.Position.Column, msg)
 	}
 	return nil
 }
