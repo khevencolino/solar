@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/khevencolino/Kite/internal/parser"
-	"github.com/khevencolino/Kite/internal/utils"
+	"github.com/khevencolino/Solar/internal/parser"
+	"github.com/khevencolino/Solar/internal/utils"
 )
 
 type AssemblyBackend struct {

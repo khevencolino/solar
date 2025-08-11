@@ -3,7 +3,7 @@ package bytecode
 import (
 	"fmt"
 
-	"github.com/khevencolino/Kite/internal/parser"
+	"github.com/khevencolino/Solar/internal/parser"
 )
 
 type BytecodeBackend struct {

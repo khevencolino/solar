@@ -3,7 +3,7 @@
 # TODO Atualizar docker para Amd64
 
 # Variáveis
-COMPILER_NAME := kite-compiler
+COMPILER_NAME := solar-compiler
 COMPILER_MAIN := ./cmd/compiler/main.go
 OUTPUT_ASM := result/saida.s
 OUTPUT_OBJ := saida.o
@@ -11,9 +11,9 @@ RUNTIME_S := external/runtime.s
 EXECUTABLE_NAME := executavel
 
 # Docker
-DOCKER_IMAGE := kite-compiler
+DOCKER_IMAGE := solar-compiler
 DOCKER_TAG := latest
-DOCKER_CONTAINER := kite-compiler-container
+DOCKER_CONTAINER := solar-compiler-container
 
 # Diretórios
 PROJECT_ROOT := $(shell pwd)
@@ -32,7 +32,7 @@ all: build
 
 # Exibe as opções disponíveis
 help:
-	@echo "Makefile para o Compilador Kite - Sistema de Backends Múltiplos"
+	@echo "Makefile para o Compilador Solar - Sistema de Backends Múltiplos"
 	@echo "================================================================="
 	@echo ""
 	@echo "🏗️  Compilação:"
@@ -51,10 +51,10 @@ help:
 	@echo "  make compare INPUT_FILE=<arquivo>       - Compara todos os backends"
 	@echo ""
 	@echo "💡 Exemplos:"
-	@echo "  make run INPUT_FILE=exemplos/variaveis/valido.kite"
-	@echo "  make run INPUT_FILE=exemplos/variaveis/valido.kite BACKEND=bytecode"
-	@echo "  make run-assembly INPUT_FILE=exemplos/aninhados/valido.kite"
-	@echo "  make compare INPUT_FILE=exemplos/variaveis/valido.kite"
+	@echo "  make run INPUT_FILE=exemplos/variaveis/valido.solar"
+	@echo "  make run INPUT_FILE=exemplos/variaveis/valido.solar BACKEND=bytecode"
+	@echo "  make run-assembly INPUT_FILE=exemplos/aninhados/valido.solar"
+	@echo "  make compare INPUT_FILE=exemplos/variaveis/valido.solar"
 
 # --- Alvos Locais ---
 
@@ -108,12 +108,12 @@ build: check-go deps
 	@echo "✅ Compilador Go construído: $(COMPILER_NAME)"
 
 # Executa o compilador Go localmente com um arquivo de entrada
-# Uso: make run INPUT_FILE=valid_program.kite
+# Uso: make run INPUT_FILE=valid_program.solar
 run: build
 ifndef INPUT_FILE
 	@echo "❌ Erro: INPUT_FILE não está definido"
 	@echo "📖 Uso: make run INPUT_FILE=<arquivo> [BACKEND=<backend>]"
-	@echo "📖 Exemplo: make run INPUT_FILE=exemplos/variaveis/valido.kite"
+	@echo "📖 Exemplo: make run INPUT_FILE=exemplos/variaveis/valido.solar"
 	@exit 1
 endif
 	@echo "🚀 Executando compilador..."
@@ -146,12 +146,12 @@ docker-build:
 	@echo "✅ Imagem Docker construída: $(DOCKER_IMAGE):$(DOCKER_TAG)"
 
 # Executa o compilador em container Docker
-# Uso: make docker-run INPUT_FILE=examples/math.kite
+# Uso: make docker-run INPUT_FILE=examples/math.solar
 docker-run: docker-build
 ifndef INPUT_FILE
 	@echo "❌ Erro: INPUT_FILE não está definido"
-	@echo "📖 Uso: make docker-run INPUT_FILE=<caminho/para/seu/programa.kite>"
-	@echo "📖 Exemplo: make docker-run INPUT_FILE=examples/math.kite"
+	@echo "📖 Uso: make docker-run INPUT_FILE=<caminho/para/seu/programa.solar>"
+	@echo "📖 Exemplo: make docker-run INPUT_FILE=examples/math.solar"
 	@exit 1
 endif
 	@echo "🐳 Executando compilador em Docker com $(INPUT_FILE)..."
@@ -229,7 +229,7 @@ lint: check-go
 
 # Mostra informações do projeto
 info:
-	@echo "📊 Informações do Projeto Kite Compiler"
+	@echo "📊 Informações do Projeto Solar Compiler"
 	@echo "========================================"
 	@echo "🏗️  Compilador: $(COMPILER_NAME)"
 	@echo "📁 Diretório: $(PROJECT_ROOT)"

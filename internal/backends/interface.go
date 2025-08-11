@@ -1,6 +1,6 @@
 package backends
 
-import "github.com/khevencolino/Kite/internal/parser"
+import "github.com/khevencolino/Solar/internal/parser"
 
 type Backend interface {
 	Compile(statements []parser.Expressao) error

@@ -3,7 +3,7 @@ package parser
 import (
 	"fmt"
 
-	"github.com/khevencolino/Kite/internal/lexer"
+	"github.com/khevencolino/Solar/internal/lexer"
 )
 
 // Expressao representa a interface base para todos os nós da AST

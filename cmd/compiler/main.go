@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/khevencolino/Kite/internal/compiler"
+	"github.com/khevencolino/Solar/internal/compiler"
 )
 
 func main() {
@@ -50,10 +50,10 @@ func processarArgumentos() (string, string, bool, error) {
 }
 
 func mostrarAjuda() {
-	fmt.Printf(`Compilador Kite - Sistema de Backends Múltiplos
+	fmt.Printf(`Compilador Solar - Sistema de Backends Múltiplos
 
 USO:
-    kite-compiler <arquivo> [backend]
+    solar-compiler <arquivo> [backend]
 
 BACKENDS DISPONÍVEIS:
 
@@ -69,19 +69,19 @@ BACKENDS DISPONÍVEIS:
 
 🔧 assembly, asm, native
    - Compilação para Assembly x86-64 nativo
-   - Gera executável standalone
+   - Gera executável standalone*
    - Máxima performance
 
 EXEMPLOS:
-    kite-compiler programa.kite                    # Usa interpretador (padrão)
-    kite-compiler programa.kite interpreter        # Interpretação direta
-    kite-compiler programa.kite bytecode           # Bytecode + VM
-    kite-compiler programa.kite assembly           # Assembly nativo
+    solar-compiler programa.solar                    # Usa interpretador (padrão)
+    solar-compiler programa.solar interpreter        # Interpretação direta
+    solar-compiler programa.solar bytecode           # Bytecode + VM
+    solar-compiler programa.solar assembly           # Assembly nativo
 
 ARQUIVOS DE TESTE:
-    exemplos/constante/valido.kite                 # Número simples
-    exemplos/operadores/valido.kite                # Expressões
-    exemplos/variaveis/valido.kite                 # Variáveis
-    exemplos/aninhados/valido.kite                 # Expressões complexas
+    exemplos/constante/valido.solar                 # Número simples
+    exemplos/operadores/valido.solar                # Expressões
+    exemplos/variaveis/valido.solar                 # Variáveis
+    exemplos/aninhados/valido.solar                 # Expressões complexas
 `)
 }

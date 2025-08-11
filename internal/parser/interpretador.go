@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/khevencolino/Kite/internal/utils"
+	"github.com/khevencolino/Solar/internal/utils"
 )
 
 // Interpretador executa a árvore sintática

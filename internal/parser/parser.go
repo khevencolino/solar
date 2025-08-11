@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/khevencolino/Kite/internal/lexer"
-	"github.com/khevencolino/Kite/internal/utils"
+	"github.com/khevencolino/Solar/internal/lexer"
+	"github.com/khevencolino/Solar/internal/utils"
 )
 
 // Parser representa o analisador sintático

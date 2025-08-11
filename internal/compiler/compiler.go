@@ -3,13 +3,13 @@ package compiler
 import (
 	"fmt"
 
-	"github.com/khevencolino/Kite/internal/backends"
-	"github.com/khevencolino/Kite/internal/backends/assembly"
-	"github.com/khevencolino/Kite/internal/backends/bytecode"
-	"github.com/khevencolino/Kite/internal/backends/interpreter"
-	"github.com/khevencolino/Kite/internal/lexer"
-	"github.com/khevencolino/Kite/internal/parser"
-	"github.com/khevencolino/Kite/internal/utils"
+	"github.com/khevencolino/Solar/internal/backends"
+	"github.com/khevencolino/Solar/internal/backends/assembly"
+	"github.com/khevencolino/Solar/internal/backends/bytecode"
+	"github.com/khevencolino/Solar/internal/backends/interpreter"
+	"github.com/khevencolino/Solar/internal/lexer"
+	"github.com/khevencolino/Solar/internal/parser"
+	"github.com/khevencolino/Solar/internal/utils"
 )
 
 type Compiler struct {
@@ -70,7 +70,7 @@ Backends disponíveis:
   bytecode, vm, bc         - Compilação para Bytecode + VM
   assembly, asm, native    - Compilação para Assembly x86-64
 
-Exemplo: ./kite-compiler programa.kite interpreter`, backendType)
+Exemplo: ./solar-compiler programa.solar interpreter`, backendType)
 	}
 
 	fmt.Printf("🎯 Backend selecionado: %s\n\n", backend.GetName())
