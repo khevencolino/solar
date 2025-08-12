@@ -79,18 +79,3 @@ func NovoToken(tipoToken TokenType, valor string, posicao Position) Token {
 		Position: posicao,
 	}
 }
-
-// EOperador verifica se o token é um operador
-func (t Token) EOperador() bool {
-	return t.Type == PLUS || t.Type == MINUS || t.Type == MULTIPLY || t.Type == POWER || t.Type == DIVIDE
-}
-
-// ENumero verifica se o token é um número
-func (t Token) ENumero() bool {
-	return t.Type == NUMBER
-}
-
-// EParenteses verifica se o token é um parêntese
-func (t Token) EParenteses() bool {
-	return t.Type == LPAREN || t.Type == RPAREN
-}

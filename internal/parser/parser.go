@@ -22,7 +22,7 @@ func NovoParser(tokens []lexer.Token) *Parser {
 	}
 }
 
-// AnalisarPrograma analisa um programa completo
+// AnalisarPrograma analisa um programa
 func (p *Parser) AnalisarPrograma() ([]Expressao, error) {
 	var statements []Expressao
 

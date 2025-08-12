@@ -21,7 +21,7 @@ func NovoCompilador() *Compiler {
 	return &Compiler{}
 }
 
-func (c *Compiler) CompilarArquivo(arquivoEntrada string, backendType string) error {
+func (c *Compiler) CompilarArquivo(arquivoEntrada string, backendType string, arch string) error {
 	// Lê o arquivo
 	conteudo, err := utils.LerArquivo(arquivoEntrada)
 	if err != nil {
@@ -46,10 +46,10 @@ func (c *Compiler) CompilarArquivo(arquivoEntrada string, backendType string) er
 	}
 
 	// Seleciona e executa backend
-	return c.executarBackend(statements, backendType)
+	return c.executarBackend(statements, backendType, arch)
 }
 
-func (c *Compiler) executarBackend(statements []parser.Expressao, backendType string) error {
+func (c *Compiler) executarBackend(statements []parser.Expressao, backendType string, arch string) error {
 	var backend backends.Backend
 
 	switch backendType {
@@ -60,7 +60,7 @@ func (c *Compiler) executarBackend(statements []parser.Expressao, backendType st
 		backend = bytecode.NewBytecodeBackend()
 
 	case "assembly", "asm", "native":
-		backend = assembly.NewAssemblyBackend()
+		backend, _ = assembly.NewAssemblyBackend(arch)
 
 	default:
 		return fmt.Errorf(`backend desconhecido: %s
@@ -68,7 +68,7 @@ func (c *Compiler) executarBackend(statements []parser.Expressao, backendType st
 Backends disponíveis:
   interpreter, interp, ast  - Interpretação direta da AST (padrão)
   bytecode, vm, bc         - Compilação para Bytecode + VM
-  assembly, asm, native    - Compilação para Assembly x86-64
+  assembly, asm, native    - Compilação para Assembly x86-64 ou ARM64
 
 Exemplo: ./solar-compiler programa.solar interpreter`, backendType)
 	}
