@@ -18,6 +18,8 @@ const (
 	ASSIGN                      // Assign para variavel ~>
 	COMMENT                     // Comentarios
 	IDENTIFIER                  // Identificador da variavel
+	FUNCTION                    // Função builtin
+	COMMA                       // Vírgula (,)
 	WHITESPACE                  // Espaços em branco
 	EOF                         // Fim do arquivo
 	INVALID                     // Token inválido
@@ -52,6 +54,10 @@ func (t TokenType) String() string {
 		return "ASSIGN"
 	case IDENTIFIER:
 		return "IDENTIFIER"
+	case FUNCTION:
+		return "FUNCTION"
+	case COMMA:
+		return "COMMA"
 	case INVALID:
 		return "INVALID"
 	default:
@@ -78,19 +84,4 @@ func NovoToken(tipoToken TokenType, valor string, posicao Position) Token {
 		Value:    valor,
 		Position: posicao,
 	}
-}
-
-// EOperador verifica se o token é um operador
-func (t Token) EOperador() bool {
-	return t.Type == PLUS || t.Type == MINUS || t.Type == MULTIPLY || t.Type == POWER || t.Type == DIVIDE
-}
-
-// ENumero verifica se o token é um número
-func (t Token) ENumero() bool {
-	return t.Type == NUMBER
-}
-
-// EParenteses verifica se o token é um parêntese
-func (t Token) EParenteses() bool {
-	return t.Type == LPAREN || t.Type == RPAREN
 }

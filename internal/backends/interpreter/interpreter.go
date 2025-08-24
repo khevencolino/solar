@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/khevencolino/Solar/internal/lexer"
 	"github.com/khevencolino/Solar/internal/parser"
+	"github.com/khevencolino/Solar/internal/registry"
 	"github.com/khevencolino/Solar/internal/utils"
 )
 
@@ -130,4 +132,91 @@ func (i *InterpreterBackend) OperacaoBinaria(operacao *parser.OperacaoBinaria) i
 			"",
 		)
 	}
+}
+
+// ChamadaFuncao implementa chamadas de função builtin
+func (i *InterpreterBackend) ChamadaFuncao(chamada *parser.ChamadaFuncao) interface{} {
+	// Valida a função usando o registro
+	assinatura, ok := registry.RegistroGlobal.ObterAssinatura(chamada.Nome)
+	if !ok {
+		return utils.NovoErro(
+			"função desconhecida",
+			chamada.Token.Position.Line,
+			chamada.Token.Position.Column,
+			fmt.Sprintf("Função '%s' não encontrada", chamada.Nome),
+		)
+	}
+
+	// Avalia todos os argumentos primeiro
+	argumentos := make([]interface{}, len(chamada.Argumentos))
+	for idx, argumento := range chamada.Argumentos {
+		valorInterface := argumento.Aceitar(i)
+		if erro, ok := valorInterface.(error); ok {
+			return erro
+		}
+		argumentos[idx] = valorInterface
+	}
+
+	// Valida argumentos (apenas verificação de quantidade em tempo de compilação)
+	numArgs := len(chamada.Argumentos)
+	if numArgs < assinatura.MinArgumentos {
+		return utils.NovoErro(
+			"erro na função",
+			chamada.Token.Position.Line,
+			chamada.Token.Position.Column,
+			fmt.Sprintf("Função '%s' requer pelo menos %d argumentos, mas recebeu %d",
+				chamada.Nome, assinatura.MinArgumentos, numArgs),
+		)
+	}
+	if assinatura.MaxArgumentos != -1 && numArgs > assinatura.MaxArgumentos {
+		return utils.NovoErro(
+			"erro na função",
+			chamada.Token.Position.Line,
+			chamada.Token.Position.Column,
+			fmt.Sprintf("Função '%s' aceita no máximo %d argumentos, mas recebeu %d",
+				chamada.Nome, assinatura.MaxArgumentos, numArgs),
+		)
+	}
+
+	// Executa baseado no tipo da função
+	return i.executarFuncaoBuiltin(chamada.Nome, assinatura.TipoFuncao, argumentos, chamada.Token.Position)
+}
+
+// executarFuncaoBuiltin executa uma função builtin baseada no seu tipo
+func (i *InterpreterBackend) executarFuncaoBuiltin(nome string, tipo registry.TipoFuncao, args []interface{}, pos lexer.Position) interface{} {
+	switch tipo {
+	case registry.FUNCAO_IMPRIME:
+		return i.executarImprime(args)
+	case registry.FUNCAO_PURA:
+		// Para funções puras, use a implementação do registro
+		resultado, err := registry.RegistroGlobal.ExecutarFuncao(nome, args)
+		if err != nil {
+			return utils.NovoErro(
+				"erro na função",
+				pos.Line,
+				pos.Column,
+				err.Error(),
+			)
+		}
+		return resultado
+	default:
+		return utils.NovoErro(
+			"erro na função",
+			pos.Line,
+			pos.Column,
+			fmt.Sprintf("Tipo de função não suportado: %v", tipo),
+		)
+	}
+}
+
+// executarImprime implementa a função imprime específica do interpretador
+func (i *InterpreterBackend) executarImprime(args []interface{}) interface{} {
+	for idx, arg := range args {
+		if idx > 0 {
+			fmt.Print(" ")
+		}
+		fmt.Print(arg)
+	}
+	fmt.Println()
+	return 0
 }

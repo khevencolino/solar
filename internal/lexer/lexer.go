@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/khevencolino/Solar/internal/registry"
 )
 
 // Lexer representa o analisador léxico
@@ -39,6 +41,7 @@ func (l *Lexer) inicializarPadroes() {
 		RPAREN:     regexp.MustCompile(`^\)`),                   // Parêntese direito: )
 		ASSIGN:     regexp.MustCompile(`^~>`),                   // Simbolo para alocar variavel ~>
 		IDENTIFIER: regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*`), // Palavras permitidas para nomear variaveis
+		COMMA:      regexp.MustCompile(`^,`),                    // Vírgula: ,
 		WHITESPACE: regexp.MustCompile(`^\s+`),                  // Espaços em branco
 		COMMENT:    regexp.MustCompile(`^//.*`),                 // Comentarios //
 	}
@@ -77,11 +80,19 @@ func (l *Lexer) proximoToken() (Token, error) {
 	restante := l.entrada[l.posicao:]
 
 	// Tenta fazer match com cada padrão (ordem importa para ** vs *)
-	tiposToken := []TokenType{COMMENT, ASSIGN, IDENTIFIER, POWER, NUMBER, PLUS, MINUS, DIVIDE, MULTIPLY, LPAREN, RPAREN, WHITESPACE}
+	tiposToken := []TokenType{COMMENT, ASSIGN, IDENTIFIER, POWER, NUMBER, PLUS, MINUS, DIVIDE, MULTIPLY, LPAREN, RPAREN, COMMA, WHITESPACE}
 
 	for _, tipoToken := range tiposToken {
 		if match := l.padroes[tipoToken].FindString(restante); match != "" {
 			token := NovoToken(tipoToken, match, posicaoAtual)
+
+			// Se é um identificador, verifica se é uma função builtin
+			if tipoToken == IDENTIFIER {
+				if l.ehFuncaoBuiltin(match) {
+					token.Type = FUNCTION
+				}
+			}
+
 			l.avancar(len(match))
 			return token, nil
 		}
@@ -92,6 +103,11 @@ func (l *Lexer) proximoToken() (Token, error) {
 	l.avancar(1)
 	return NovoToken(INVALID, caractereInvalido, posicaoAtual),
 		fmt.Errorf("caractere inválido '%s' em %s", caractereInvalido, posicaoAtual)
+}
+
+// ehFuncaoBuiltin verifica se um identificador é uma função builtin
+func (l *Lexer) ehFuncaoBuiltin(nome string) bool {
+	return registry.RegistroGlobal.EhFuncaoBuiltin(nome)
 }
 
 // obterPosicaoAtual retorna a posição atual no código fonte
@@ -125,37 +141,6 @@ func (l *Lexer) espiar() byte {
 // temMais verifica se há mais caracteres para processar
 func (l *Lexer) temMais() bool {
 	return l.posicao < len(l.entrada)
-}
-
-// ValidarExpressao valida se a expressão tem sintaxe correta
-func (l *Lexer) ValidarExpressao(tokens []Token) error {
-	if len(tokens) == 0 {
-		return fmt.Errorf("expressão vazia")
-	}
-
-	return validarParenteses(tokens)
-}
-
-// validarParenteses verifica se os parênteses estão balanceados
-func validarParenteses(tokens []Token) error {
-	contadorParenteses := 0
-	for _, token := range tokens {
-		switch token.Type {
-		case LPAREN:
-			contadorParenteses++
-		case RPAREN:
-			contadorParenteses--
-			if contadorParenteses < 0 {
-				return fmt.Errorf("parênteses não balanceados: ')' extra em %s", token.Position)
-			}
-		}
-	}
-
-	if contadorParenteses > 0 {
-		return fmt.Errorf("parênteses não balanceados: %d '(' sem ')' correspondente", contadorParenteses)
-	}
-
-	return nil
 }
 
 // ImprimirTokens imprime todos os tokens de forma formatada

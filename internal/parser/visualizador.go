@@ -76,6 +76,16 @@ func (v *VisualizadorArvore) criarArvoreRecursiva(expressao Expressao) *tree.Tre
 		v.adicionarSubarvore(arvore, subarvoreDireita)
 		return arvore
 
+	case *ChamadaFuncao:
+		arvore := tree.NewTree(tree.NodeString(expr.Nome))
+
+		// Adiciona cada argumento como filho
+		for _, argumento := range expr.Argumentos {
+			subarvoreArgumento := v.criarArvoreRecursiva(argumento)
+			v.adicionarSubarvore(arvore, subarvoreArgumento)
+		}
+		return arvore
+
 	default:
 		return tree.NewTree(tree.NodeString("ERRO"))
 	}

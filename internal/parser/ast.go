@@ -6,39 +6,19 @@ import (
 	"github.com/khevencolino/Solar/internal/lexer"
 )
 
+// Node define a interface
+type Node interface {
+	Constante(constante *Constante) interface{}
+	OperacaoBinaria(operacao *OperacaoBinaria) interface{}
+	Variavel(variavel *Variavel) interface{}
+	Atribuicao(atribuicao *Atribuicao) interface{}
+	ChamadaFuncao(chamada *ChamadaFuncao) interface{}
+}
+
 // Expressao representa a interface base para todos os nós da AST
 type Expressao interface {
 	Aceitar(node Node) any
 	String() string
-}
-
-// Variavel representa uma variavel na árvore
-type Variavel struct {
-	Nome  string
-	Token lexer.Token
-}
-
-func (v *Variavel) Aceitar(node Node) interface{} {
-	return node.Variavel(v)
-}
-
-func (v *Variavel) String() string {
-	return v.Nome
-}
-
-// Atribuicao representa uma atribuicao na árvore
-type Atribuicao struct {
-	Nome  string
-	Valor Expressao
-	Token lexer.Token
-}
-
-func (a *Atribuicao) Aceitar(node Node) interface{} {
-	return node.Atribuicao(a)
-}
-
-func (a *Atribuicao) String() string {
-	return fmt.Sprintf("%s = %s", a.Nome, a.Valor.String())
 }
 
 // Constante representa um literal inteiro na árvore
@@ -47,7 +27,7 @@ type Constante struct {
 	Token lexer.Token
 }
 
-// Aceitar implementa o padrão visitor para Constante
+// Aceitar implementa o padrão  para Constante
 func (c *Constante) Aceitar(node Node) interface{} {
 	return node.Constante(c)
 }
@@ -65,7 +45,7 @@ type OperacaoBinaria struct {
 	Token            lexer.Token
 }
 
-// Aceitar implementa o padrão visitor para OperacaoBinaria
+// Aceitar implementa o padrão para OperacaoBinaria
 func (o *OperacaoBinaria) Aceitar(node Node) interface{} {
 	return node.OperacaoBinaria(o)
 }
@@ -107,10 +87,53 @@ func (t TipoOperador) String() string {
 	}
 }
 
-// Node define a interface
-type Node interface {
-	Constante(constante *Constante) interface{}
-	OperacaoBinaria(operacao *OperacaoBinaria) interface{}
-	Variavel(variavel *Variavel) interface{}
-	Atribuicao(atribuicao *Atribuicao) interface{}
+// Variavel representa uma variavel na árvore
+type Variavel struct {
+	Nome  string
+	Token lexer.Token
+}
+
+func (v *Variavel) Aceitar(node Node) any {
+	return node.Variavel(v)
+}
+
+func (v *Variavel) String() string {
+	return v.Nome
+}
+
+// Atribuicao representa uma atribuicao na árvore
+type Atribuicao struct {
+	Nome  string
+	Valor Expressao
+	Token lexer.Token
+}
+
+func (a *Atribuicao) Aceitar(node Node) interface{} {
+	return node.Atribuicao(a)
+}
+
+func (a *Atribuicao) String() string {
+	return fmt.Sprintf("%s = %s", a.Nome, a.Valor.String())
+}
+
+// ChamadaFuncao representa uma chamada de função na árvore
+type ChamadaFuncao struct {
+	Nome       string
+	Argumentos []Expressao
+	Token      lexer.Token
+}
+
+func (c *ChamadaFuncao) Aceitar(node Node) interface{} {
+	return node.ChamadaFuncao(c)
+}
+
+func (c *ChamadaFuncao) String() string {
+	args := ""
+	for i, arg := range c.Argumentos {
+		if i > 0 {
+			args += ", "
+		}
+		args += arg.String()
+	}
+	return fmt.Sprintf("%s(%s)", c.Nome, args)
 }

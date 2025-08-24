@@ -8,10 +8,39 @@ import (
 	"github.com/khevencolino/Solar/internal/utils"
 )
 
+// Precedencia define a precedência dos operadores
+type Precedencia int
+
+const (
+	PRECEDENCIA_NENHUMA       Precedencia = iota
+	PRECEDENCIA_SOMA                      // + -
+	PRECEDENCIA_MULTIPLICACAO             // * /
+	PRECEDENCIA_POTENCIA                  // **
+)
+
 // Parser representa o analisador sintático
 type Parser struct {
 	tokens       []lexer.Token
 	posicaoAtual int
+}
+
+// obterPrecedencia retorna a precedência de um operador
+func (p *Parser) obterPrecedencia(tokenType lexer.TokenType) Precedencia {
+	switch tokenType {
+	case lexer.PLUS, lexer.MINUS:
+		return PRECEDENCIA_SOMA
+	case lexer.MULTIPLY, lexer.DIVIDE:
+		return PRECEDENCIA_MULTIPLICACAO
+	case lexer.POWER:
+		return PRECEDENCIA_POTENCIA
+	default:
+		return PRECEDENCIA_NENHUMA
+	}
+}
+
+// ehAssociativoADireita verifica se o operador é associativo à direita
+func (p *Parser) ehAssociativoADireita(tokenType lexer.TokenType) bool {
+	return tokenType == lexer.POWER // ** é associativo à direita
 }
 
 // NovoParser cria um novo analisador sintático
@@ -22,7 +51,7 @@ func NovoParser(tokens []lexer.Token) *Parser {
 	}
 }
 
-// AnalisarPrograma analisa um programa completo
+// AnalisarPrograma analisa um programa
 func (p *Parser) AnalisarPrograma() ([]Expressao, error) {
 	var statements []Expressao
 
@@ -41,25 +70,93 @@ func (p *Parser) AnalisarPrograma() ([]Expressao, error) {
 	return statements, nil
 }
 
-// analisarExpressao implementa a análise descendente recursiva para expressões
+// analisarStatement implementa a análise descendente recursiva para expressões
 func (p *Parser) analisarStatement() (Expressao, error) {
-	token := p.proximoToken()
+	token := p.tokenAtual()
 
+	// Verifica se é uma atribuição
 	if token.Type == lexer.IDENTIFIER {
+		p.proximoToken() // consome o identificador
+
 		if p.tokenAtual().Type == lexer.ASSIGN {
-			p.proximoToken()
-			valor, err := p.analisarStatement()
+			p.proximoToken() // consome o operador de atribuição
+			valor, err := p.analisarExpressao(PRECEDENCIA_NENHUMA)
 			if err != nil {
-				return nil, nil
+				return nil, err
 			}
 			return &Atribuicao{Nome: token.Value, Valor: valor, Token: token}, nil
 		} else {
-			return &Variavel{Nome: token.Value, Token: token}, nil
+			// Se não é atribuição, volta um token e analisa como expressão
+			p.posicaoAtual--
+			return p.analisarExpressao(PRECEDENCIA_NENHUMA)
 		}
 	}
 
-	if token.Type == lexer.NUMBER {
-		// Caso: <expressao> ::= <literal-inteiro>
+	// Caso contrário, analisa como expressão
+	return p.analisarExpressao(PRECEDENCIA_NENHUMA)
+}
+
+// analisarExpressao implementa precedência de operadores usando o algoritmo Pratt
+func (p *Parser) analisarExpressao(precedenciaMinima Precedencia) (Expressao, error) {
+	// Analisa o lado esquerdo (prefixo)
+	esquerda, err := p.analisarPrefixo()
+	if err != nil {
+		return nil, err
+	}
+
+	// Processa operadores binários com precedência adequada
+	for {
+		tokenAtual := p.tokenAtual()
+
+		// Se chegou ao fim ou não é um operador binário, para
+		if tokenAtual.Type == lexer.EOF || tokenAtual.Type == lexer.RPAREN {
+			break
+		}
+
+		precedenciaAtual := p.obterPrecedencia(tokenAtual.Type)
+
+		// Se não é um operador binário ou a precedência é menor que a mínima, para
+		if precedenciaAtual == PRECEDENCIA_NENHUMA || precedenciaAtual < precedenciaMinima {
+			break
+		}
+
+		// Se é associativo à direita, incrementa a precedência para a recursão
+		proximaPrecedencia := precedenciaAtual
+		if !p.ehAssociativoADireita(tokenAtual.Type) {
+			proximaPrecedencia++
+		}
+
+		// Consome o operador
+		operadorToken := p.proximoToken()
+		operador, err := p.tokenParaOperador(operadorToken)
+		if err != nil {
+			return nil, err
+		}
+
+		// Analisa o lado direito com a precedência apropriada
+		direita, err := p.analisarExpressao(proximaPrecedencia)
+		if err != nil {
+			return nil, err
+		}
+
+		// Cria a operação binária
+		esquerda = &OperacaoBinaria{
+			OperandoEsquerdo: esquerda,
+			Operador:         operador,
+			OperandoDireito:  direita,
+			Token:            operadorToken,
+		}
+	}
+
+	return esquerda, nil
+}
+
+// analisarPrefixo analisa expressões prefixas (números, variáveis, expressões parentizadas)
+func (p *Parser) analisarPrefixo() (Expressao, error) {
+	token := p.proximoToken()
+
+	switch token.Type {
+	case lexer.NUMBER:
 		valor, err := strconv.Atoi(token.Value)
 		if err != nil {
 			return nil, utils.NovoErro(
@@ -71,19 +168,16 @@ func (p *Parser) analisarStatement() (Expressao, error) {
 		}
 		return &Constante{Valor: valor, Token: token}, nil
 
-	} else if token.Type == lexer.LPAREN {
-		// Caso: <expressao> ::= (<expressao> <operador> <expressao>)
-		operandoEsquerdo, err := p.analisarStatement()
-		if err != nil {
-			return nil, err
-		}
+	case lexer.IDENTIFIER:
+		return &Variavel{Nome: token.Value, Token: token}, nil
 
-		operador, err := p.analisarOperador()
-		if err != nil {
-			return nil, err
-		}
+	case lexer.FUNCTION:
+		// Chamada de função
+		return p.analisarChamadaFuncao(token)
 
-		operandoDireito, err := p.analisarStatement()
+	case lexer.LPAREN:
+		// Expressão parentizada
+		expressao, err := p.analisarExpressao(PRECEDENCIA_NENHUMA)
 		if err != nil {
 			return nil, err
 		}
@@ -93,14 +187,9 @@ func (p *Parser) analisarStatement() (Expressao, error) {
 			return nil, err
 		}
 
-		return &OperacaoBinaria{
-			OperandoEsquerdo: operandoEsquerdo,
-			Operador:         operador,
-			OperandoDireito:  operandoDireito,
-			Token:            token,
-		}, nil
+		return expressao, nil
 
-	} else {
+	default:
 		return nil, utils.NovoErro(
 			"expressão inválida",
 			token.Position.Line,
@@ -110,10 +199,8 @@ func (p *Parser) analisarStatement() (Expressao, error) {
 	}
 }
 
-// analisarOperador analisa operadores
-func (p *Parser) analisarOperador() (TipoOperador, error) {
-	token := p.proximoToken()
-
+// tokenParaOperador converte um token em um TipoOperador
+func (p *Parser) tokenParaOperador(token lexer.Token) (TipoOperador, error) {
 	switch token.Type {
 	case lexer.PLUS:
 		return ADICAO, nil
@@ -130,9 +217,48 @@ func (p *Parser) analisarOperador() (TipoOperador, error) {
 			"operador inválido",
 			token.Position.Line,
 			token.Position.Column,
-			fmt.Sprintf("esperado operador (+, -, *, /), encontrado '%s'", token.Value),
+			fmt.Sprintf("esperado operador (+, -, *, /, **), encontrado '%s'", token.Value),
 		)
 	}
+}
+
+// analisarChamadaFuncao analisa uma chamada de função
+func (p *Parser) analisarChamadaFuncao(tokenFuncao lexer.Token) (Expressao, error) {
+	// Espera parêntese de abertura
+	if err := p.verificarProximoToken(lexer.LPAREN); err != nil {
+		return nil, err
+	}
+
+	var argumentos []Expressao
+
+	// Se não é um parêntese de fechamento, analisa argumentos
+	if p.tokenAtual().Type != lexer.RPAREN {
+		for {
+			argumento, err := p.analisarExpressao(PRECEDENCIA_NENHUMA)
+			if err != nil {
+				return nil, err
+			}
+			argumentos = append(argumentos, argumento)
+
+			// Se o próximo token é uma vírgula, consome e continua
+			if p.tokenAtual().Type == lexer.COMMA {
+				p.proximoToken()
+			} else {
+				break
+			}
+		}
+	}
+
+	// Espera parêntese de fechamento
+	if err := p.verificarProximoToken(lexer.RPAREN); err != nil {
+		return nil, err
+	}
+
+	return &ChamadaFuncao{
+		Nome:       tokenFuncao.Value,
+		Argumentos: argumentos,
+		Token:      tokenFuncao,
+	}, nil
 }
 
 // proximoToken retorna o próximo token e avança a posição
@@ -151,12 +277,11 @@ func (p *Parser) proximoToken() lexer.Token {
 func (p *Parser) verificarProximoToken(tipoEsperado lexer.TokenType) error {
 	token := p.proximoToken()
 	if token.Type != tipoEsperado {
-		return utils.NovoErro(
-			"token inesperado",
-			token.Position.Line,
-			token.Position.Column,
-			fmt.Sprintf("esperado %s, encontrado %s", tipoEsperado, token.Type),
-		)
+		msg := fmt.Sprintf("esperado %s, encontrado %s", tipoEsperado, token.Type)
+		if token.Type == lexer.EOF {
+			msg += " — possível parêntese não fechado"
+		}
+		return utils.NovoErro("token inesperado", token.Position.Line, token.Position.Column, msg)
 	}
 	return nil
 }
