@@ -69,11 +69,10 @@ Backends disponíveis:
   interpreter, interp, ast  - Interpretação direta da AST (padrão)
   bytecode, vm, bc         - Compilação para Bytecode + VM
   assembly, asm, native    - Compilação para Assembly x86-64 ou ARM64
-
-Exemplo: ./solar-compiler programa.solar interpreter`, backendType)
+  `, backendType)
 	}
 
-	fmt.Printf("🎯 Backend selecionado: %s\n\n", backend.GetName())
+	fmt.Printf("Backend selecionado: %s\n\n", backend.GetName())
 
 	return backend.Compile(statements)
 }

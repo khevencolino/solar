@@ -18,6 +18,8 @@ const (
 	ASSIGN                      // Assign para variavel ~>
 	COMMENT                     // Comentarios
 	IDENTIFIER                  // Identificador da variavel
+	FUNCTION                    // Função builtin
+	COMMA                       // Vírgula (,)
 	WHITESPACE                  // Espaços em branco
 	EOF                         // Fim do arquivo
 	INVALID                     // Token inválido
@@ -52,6 +54,10 @@ func (t TokenType) String() string {
 		return "ASSIGN"
 	case IDENTIFIER:
 		return "IDENTIFIER"
+	case FUNCTION:
+		return "FUNCTION"
+	case COMMA:
+		return "COMMA"
 	case INVALID:
 		return "INVALID"
 	default:

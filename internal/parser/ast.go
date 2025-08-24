@@ -12,6 +12,7 @@ type Node interface {
 	OperacaoBinaria(operacao *OperacaoBinaria) interface{}
 	Variavel(variavel *Variavel) interface{}
 	Atribuicao(atribuicao *Atribuicao) interface{}
+	ChamadaFuncao(chamada *ChamadaFuncao) interface{}
 }
 
 // Expressao representa a interface base para todos os nós da AST
@@ -113,4 +114,26 @@ func (a *Atribuicao) Aceitar(node Node) interface{} {
 
 func (a *Atribuicao) String() string {
 	return fmt.Sprintf("%s = %s", a.Nome, a.Valor.String())
+}
+
+// ChamadaFuncao representa uma chamada de função na árvore
+type ChamadaFuncao struct {
+	Nome       string
+	Argumentos []Expressao
+	Token      lexer.Token
+}
+
+func (c *ChamadaFuncao) Aceitar(node Node) interface{} {
+	return node.ChamadaFuncao(c)
+}
+
+func (c *ChamadaFuncao) String() string {
+	args := ""
+	for i, arg := range c.Argumentos {
+		if i > 0 {
+			args += ", "
+		}
+		args += arg.String()
+	}
+	return fmt.Sprintf("%s(%s)", c.Nome, args)
 }

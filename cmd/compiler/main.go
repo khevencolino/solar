@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -28,41 +29,44 @@ func main() {
 }
 
 func processarArgumentos() (string, string, string, bool, error) {
-	args := os.Args
+	// Define flags
+	backend := flag.String("backend", "interpreter", "Backend a ser usado (interpreter, bytecode, assembly)")
+	arch := flag.String("arch", "x86_64", "Arquitetura para assembly (x86_64, arm64)")
+	help := flag.Bool("help", false, "Mostra ajuda")
 
-	if len(args) < 2 {
-		return "", "", "", false, fmt.Errorf("argumentos insuficientes")
-	}
+	// Parse flags
+	flag.Parse()
 
-	// Verifica help
-	if args[1] == "--help" || args[1] == "-h" {
+	// Verifica se help foi solicitado
+	if *help {
 		return "", "", "", true, nil
 	}
 
-	arquivo := args[1]
-	backend := "interpreter"
-	arch := "x86_64"
-
-	if len(args) >= 3 {
-		backend = args[2]
+	// Verifica se arquivo foi fornecido
+	args := flag.Args()
+	if len(args) < 1 {
+		return "", "", "", false, fmt.Errorf("arquivo de entrada requerido")
 	}
 
-	if len(args) >= 4 {
-		arch = args[3]
-	}
+	arquivo := args[0]
 
-	return arquivo, backend, arch, false, nil
+	return arquivo, *backend, *arch, false, nil
 }
 
 func mostrarAjuda() {
 	fmt.Printf(`Compilador Solar - Sistema de Backends Múltiplos
 
 USO:
-    solar-compiler <arquivo> [backend] [arquitetura]
+    solar-compiler [flags] <arquivo>
+
+FLAGS:
+    -backend=<tipo>     Backend a ser usado (padrão: interpreter)
+    -arch=<arquitetura> Arquitetura para assembly (padrão: x86_64)
+    -help               Mostra esta ajuda
 
 BACKENDS DISPONÍVEIS:
 
-🔍 interpreter, interp, ast (PADRÃO)
+🔍 interpreter, interp, ast
     - Interpretação direta da AST
     - Mostra árvore sintática
 
@@ -77,14 +81,14 @@ BACKENDS DISPONÍVEIS:
     - Máxima performance
 
 ARQUITETURAS SUPORTADAS PARA ASSEMBLY:
-    - x86_64 (padrão)
-    - arm64
+    - x86_64 (Linux - padrão)
+    - arm64 (macOS)
 
 EXEMPLOS:
     solar-compiler programa.solar                            # Usa interpretador (padrão)
-    solar-compiler programa.solar interpreter                # Interpretação direta
-    solar-compiler programa.solar bytecode                   # Bytecode + VM
-    solar-compiler programa.solar assembly                   # Assembly x86_64 (padrão)
-    solar-compiler programa.solar assembly arm64             # Assembly ARM64
+    solar-compiler -backend=interpreter programa.solar       # Interpretação direta
+    solar-compiler -backend=bytecode programa.solar          # Bytecode + VM
+    solar-compiler -backend=assembly programa.solar          # Assembly x86_64 (padrão)
+    solar-compiler -backend=assembly -arch=arm64 programa.solar # Assembly ARM64
 `)
 }
