@@ -4,10 +4,10 @@ Um compilador moderno para a linguagem Solar com múltiplos backends de execuç�
 
 ## 🌟 Destaques
 
-- **🎯 Múltiplos Backends**: Interpretador, Bytecode + VM, Assembly nativo
+- **🎯 Múltiplos Backends**: Interpretador, Bytecode + VM, Assembly nativo, LLVM IR
 - **🧮 Precedência de Operadores**: Parsing inteligente sem parênteses obrigatórios
 - **🔧 Funções Builtin**: `imprime()`, `soma()`, `abs()` extensíveis
-- **🏗️ Arquiteturas**: x86-64 (Linux) e ARM64 (macOS)
+- **🏗️ Arquitetura**: x86-64
 - **🌳 Visualização AST**: Árvore sintática gráfica
 
 ## 📋 Índice
@@ -44,6 +44,9 @@ make run FILE=exemplos/operacao/valido.solar BACKEND=bytecode
 
 # Executar com assembly
 make run FILE=exemplos/operacao/valido.solar BACKEND=assembly
+
+# Executar com LLVM IR
+make run FILE=exemplos/operacao/valido.solar BACKEND=llvm
 ```
 
 ### CLI Direta
@@ -55,8 +58,14 @@ go run cmd/compiler/main.go arquivo.solar
 # Bytecode
 go run cmd/compiler/main.go -backend=bytecode arquivo.solar
 
-# Assembly ARM64
-go run cmd/compiler/main.go -backend=assembly -arch=arm64 arquivo.solar
+# LLVM IR
+go run cmd/compiler/main.go -backend=llvm arquivo.solar
+
+# Assembly x86-64
+go run cmd/compiler/main.go -backend=assembly arquivo.solar
+
+# Com debug habilitado
+go run cmd/compiler/main.go -debug arquivo.solar
 ```
 
 ## 🧪 Exemplos
@@ -113,6 +122,9 @@ make run FILE=exemplos/funcoes_builtin/teste_simples.solar BACKEND=bytecode
 
 # Assembly
 make run FILE=exemplos/power/valido.solar BACKEND=assembly
+
+# LLVM IR
+make run FILE=exemplos/operacao/valido.solar BACKEND=llvm
 ```
 
 ## 🔧 Backends
@@ -125,14 +137,19 @@ Execução direta da AST.
 
 Compilação para bytecode próprio com máquina virtual.
 
-### Assembly (x86-64/ARM64)
+### Assembly (x86-64)
 
 Geração de código nativo.
+
+### LLVM IR
+
+Compilação para LLVM Intermediate Representation.
 
 ```bash
 # Escolher backend
 make run FILE=arquivo.solar BACKEND=bytecode
 make run FILE=arquivo.solar BACKEND=assembly
+make run FILE=arquivo.solar BACKEND=llvm
 ```
 
 ## 🛠️ Desenvolvimento
