@@ -3,6 +3,8 @@ package bytecode
 import (
 	"fmt"
 	"math"
+
+	"github.com/khevencolino/Solar/internal/debug"
 )
 
 type VM struct {
@@ -22,13 +24,15 @@ func NewVM(varCount int) *VM {
 }
 
 func (vm *VM) Execute(instructions []Instruction) error {
-	fmt.Printf("📊 Bytecode gerado (%d instruções):\n", len(instructions))
-	for i, instr := range instructions {
-		fmt.Printf("  %03d: %s %d\n", i, instr.OpCode, instr.Operand)
+	debug.Printf("📊 Bytecode gerado (%d instruções):\n", len(instructions))
+	if debug.Enabled {
+		for i, instr := range instructions {
+			debug.Printf("  %03d: %s %d\n", i, instr.OpCode, instr.Operand)
+		}
+		debug.Println()
 	}
-	fmt.Println()
 
-	fmt.Printf("🏃 Executando...\n")
+	debug.Printf("🏃 Executando...\n")
 
 	for vm.pc < len(instructions) {
 		instr := instructions[vm.pc]
@@ -83,7 +87,7 @@ func (vm *VM) Execute(instructions []Instruction) error {
 			fmt.Printf("Resultado: %d\n", vm.peek())
 
 		case OP_HALT:
-			fmt.Printf("✅ Execução concluída!\n")
+			debug.Printf("✅ Execução concluída!\n")
 			return nil
 
 		default:

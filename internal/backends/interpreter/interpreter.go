@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/khevencolino/Solar/internal/debug"
 	"github.com/khevencolino/Solar/internal/lexer"
 	"github.com/khevencolino/Solar/internal/parser"
 	"github.com/khevencolino/Solar/internal/registry"
@@ -24,12 +25,12 @@ func (i *InterpreterBackend) GetName() string      { return "Interpretador AST" 
 func (i *InterpreterBackend) GetExtension() string { return "" }
 
 func (i *InterpreterBackend) Compile(statements []parser.Expressao) error {
-	fmt.Printf("🔍 Interpretando diretamente da AST...\n")
+	debug.Printf("🔍 Interpretando diretamente da AST...\n")
 
 	var ultimoResultado interface{}
 
 	for idx, stmt := range statements {
-		fmt.Printf("--- Statement %d ---\n", idx+1)
+		debug.Printf("--- Statement %d ---\n", idx+1)
 
 		// Imprime a árvore (opcional - pode ser configurável)
 		visualizador := parser.NovoVisualizador()
@@ -45,7 +46,7 @@ func (i *InterpreterBackend) Compile(statements []parser.Expressao) error {
 		ultimoResultado = resultado
 	}
 
-	fmt.Printf("\n✅ Interpretação concluída! Resultado final: %d\n", ultimoResultado)
+	debug.Printf("\n✅ Interpretação concluída! Resultado final: %d\n", ultimoResultado)
 	return nil
 }
 

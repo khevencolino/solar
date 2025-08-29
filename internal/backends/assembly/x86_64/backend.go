@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/khevencolino/Solar/internal/debug"
 	"github.com/khevencolino/Solar/internal/parser"
 	"github.com/khevencolino/Solar/internal/registry"
 	"github.com/khevencolino/Solar/internal/utils"
@@ -26,13 +27,13 @@ func (a *X86_64Backend) GetName() string      { return "Assembly x86-64" }
 func (a *X86_64Backend) GetExtension() string { return ".s" }
 
 func (a *X86_64Backend) Compile(statements []parser.Expressao) error {
-	fmt.Printf("🔧 Compilando para Assembly x86-64...\n")
+	debug.Printf("🔧 Compilando para Assembly x86-64...\n")
 
 	a.gerarPrologo()
 
 	// Processa statements
 	for i, stmt := range statements {
-		fmt.Printf("  Processando statement %d...\n", i+1)
+		debug.Printf("  Processando statement %d...\n", i+1)
 		a.checarExpressao(stmt)
 
 		// Se for a última expressão, imprime resultado
@@ -225,8 +226,8 @@ func (a *X86_64Backend) getVarName(nome string) string {
 }
 
 func (a *X86_64Backend) compilarAssembly(arquivoAssembly string) error {
-	fmt.Printf("🧑‍💻 Criando arquivo executavel...\n")
-	fmt.Printf("🔗 Linkando com runtime...\n")
+	debug.Printf("🧑‍💻 Criando arquivo executavel...\n")
+	debug.Printf("🔗 Linkando com runtime...\n")
 
 	objectFile := filepath.Join("result", "programa.o")
 	cmdAs := exec.Command("as", "-o", objectFile, arquivoAssembly)
@@ -240,8 +241,8 @@ func (a *X86_64Backend) compilarAssembly(arquivoAssembly string) error {
 		return fmt.Errorf("erro ao ligar (ld): %v", err)
 	}
 
-	fmt.Printf("✅ Executável gerado: %s\n", executavel)
-	fmt.Printf("🏃 Para executar: ./%s\n", executavel)
+	debug.Printf("✅ Executável gerado: %s\n", executavel)
+	debug.Printf("🏃 Para executar: ./%s\n", executavel)
 
 	return nil
 }

@@ -7,6 +7,8 @@ import (
 	"github.com/khevencolino/Solar/internal/backends/assembly"
 	"github.com/khevencolino/Solar/internal/backends/bytecode"
 	"github.com/khevencolino/Solar/internal/backends/interpreter"
+	"github.com/khevencolino/Solar/internal/backends/llvm"
+	"github.com/khevencolino/Solar/internal/debug"
 	"github.com/khevencolino/Solar/internal/lexer"
 	"github.com/khevencolino/Solar/internal/parser"
 	"github.com/khevencolino/Solar/internal/utils"
@@ -15,13 +17,17 @@ import (
 type Compiler struct {
 	lexer  *lexer.Lexer
 	parser *parser.Parser
+	debug  bool
 }
 
 func NovoCompilador() *Compiler {
 	return &Compiler{}
 }
 
-func (c *Compiler) CompilarArquivo(arquivoEntrada string, backendType string, arch string) error {
+func (c *Compiler) CompilarArquivo(arquivoEntrada string, backendType string, arch string, debugEnabled bool) error {
+	c.debug = debugEnabled
+	debug.Enabled = debugEnabled
+
 	// Lê o arquivo
 	conteudo, err := utils.LerArquivo(arquivoEntrada)
 	if err != nil {
@@ -34,10 +40,12 @@ func (c *Compiler) CompilarArquivo(arquivoEntrada string, backendType string, ar
 		return err
 	}
 
-	// Imprime tokens
-	fmt.Printf("Tokens encontrados:\n")
-	lexer.ImprimirTokens(tokens)
-	fmt.Println()
+	// Imprime tokens apenas se debug estiver ativo
+	if c.debug {
+		fmt.Printf("Tokens encontrados:\n")
+		lexer.ImprimirTokens(tokens)
+		fmt.Println()
+	}
 
 	// Análise sintática
 	statements, err := c.analisarSintaxe(tokens)
@@ -60,7 +68,14 @@ func (c *Compiler) executarBackend(statements []parser.Expressao, backendType st
 		backend = bytecode.NewBytecodeBackend()
 
 	case "assembly", "asm", "native":
-		backend, _ = assembly.NewAssemblyBackend(arch)
+		var err error
+		backend, err = assembly.NewAssemblyBackend(arch)
+		if err != nil {
+			return err
+		}
+
+	case "llvm", "llvmir", "ir":
+		backend = llvm.NewLLVMBackend()
 
 	default:
 		return fmt.Errorf(`backend desconhecido: %s
@@ -68,11 +83,14 @@ func (c *Compiler) executarBackend(statements []parser.Expressao, backendType st
 Backends disponíveis:
   interpreter, interp, ast  - Interpretação direta da AST (padrão)
   bytecode, vm, bc         - Compilação para Bytecode + VM
-  assembly, asm, native    - Compilação para Assembly x86-64 ou ARM64
+  assembly, asm, native    - Compilação para Assembly x86-64
+  llvm, llvmir, ir         - Compilação para LLVM IR
   `, backendType)
 	}
 
-	fmt.Printf("Backend selecionado: %s\n\n", backend.GetName())
+	if c.debug {
+		fmt.Printf("Backend selecionado: %s\n\n", backend.GetName())
+	}
 
 	return backend.Compile(statements)
 }

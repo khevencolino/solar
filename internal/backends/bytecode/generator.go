@@ -3,6 +3,7 @@ package bytecode
 import (
 	"fmt"
 
+	"github.com/khevencolino/Solar/internal/debug"
 	"github.com/khevencolino/Solar/internal/parser"
 	"github.com/khevencolino/Solar/internal/registry"
 )
@@ -24,11 +25,11 @@ func (b *BytecodeBackend) GetName() string      { return "Bytecode + VM" }
 func (b *BytecodeBackend) GetExtension() string { return ".bc" }
 
 func (b *BytecodeBackend) Compile(statements []parser.Expressao) error {
-	fmt.Printf("🤖 Compilando para Bytecode...\n")
+	debug.Printf("🤖 Compilando para Bytecode...\n")
 
 	// Gera bytecode
 	for i, stmt := range statements {
-		fmt.Printf("  Processando statement %d...\n", i+1)
+		debug.Printf("  Processando statement %d...\n", i+1)
 		b.visitarExpressao(stmt)
 
 		// Se for a última expressão e NÃO for uma chamada de função, imprime resultado
@@ -153,7 +154,7 @@ func (b *BytecodeBackend) getVariableIndex(nome string) int {
 }
 
 func (b *BytecodeBackend) executarVM() error {
-	fmt.Printf("🚀 Executando na Virtual Machine...\n")
+	debug.Printf("🚀 Executando na Virtual Machine...\n")
 
 	vm := NewVM(b.varCount)
 	return vm.Execute(b.instructions)
