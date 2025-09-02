@@ -45,7 +45,7 @@ func (a *X86_64Backend) Compile(statements []parser.Expressao) error {
 	a.gerarEpilogo()
 
 	// Escreve arquivo assembly
-	arquivoSaida := filepath.Join("result", "programa.s")
+	arquivoSaida := "programa.s"
 	if err := utils.EscreverArquivo(arquivoSaida, a.output.String()); err != nil {
 		return err
 	}
@@ -226,8 +226,8 @@ func (a *X86_64Backend) getVarName(nome string) string {
 }
 
 func (a *X86_64Backend) compilarAssembly(arquivoAssembly string) error {
-	debug.Printf("🧑‍💻 Criando arquivo executavel...\n")
-	debug.Printf("🔗 Linkando com runtime...\n")
+	debug.Printf("Criando arquivo executavel...\n")
+	debug.Printf("Linkando com runtime...\n")
 
 	objectFile := filepath.Join("result", "programa.o")
 	cmdAs := exec.Command("as", "-o", objectFile, arquivoAssembly)
@@ -241,8 +241,8 @@ func (a *X86_64Backend) compilarAssembly(arquivoAssembly string) error {
 		return fmt.Errorf("erro ao ligar (ld): %v", err)
 	}
 
-	debug.Printf("✅ Executável gerado: %s\n", executavel)
-	debug.Printf("🏃 Para executar: ./%s\n", executavel)
+	debug.Printf("Executável gerado: %s\n", executavel)
+	debug.Printf("Para executar: ./%s\n", executavel)
 
 	return nil
 }

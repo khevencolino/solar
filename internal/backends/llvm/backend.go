@@ -2,8 +2,6 @@ package llvm
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
@@ -13,6 +11,7 @@ import (
 
 	"github.com/khevencolino/Solar/internal/debug"
 	"github.com/khevencolino/Solar/internal/parser"
+	"github.com/khevencolino/Solar/internal/utils"
 )
 
 type LLVMBackend struct {
@@ -66,19 +65,9 @@ func (l *LLVMBackend) Compile(statements []parser.Expressao) error {
 	l.block.NewRet(constant.NewInt(types.I32, 0))
 
 	// Escreve arquivo LLVM IR
-	arquivoSaida := filepath.Join("result", "programa.ll")
-	if err := os.MkdirAll(filepath.Dir(arquivoSaida), 0755); err != nil {
-		return fmt.Errorf("erro ao criar diretório: %v", err)
-	}
-
-	file, err := os.Create(arquivoSaida)
-	if err != nil {
-		return fmt.Errorf("erro ao criar arquivo: %v", err)
-	}
-	defer file.Close()
-
-	if _, err := file.WriteString(l.module.String()); err != nil {
-		return fmt.Errorf("erro ao escrever arquivo: %v", err)
+	arquivoSaida := "programa.ll"
+	if err := utils.EscreverArquivo(arquivoSaida, l.module.String()); err != nil {
+		return err
 	}
 
 	debug.Printf("✅ Arquivo LLVM IR gerado em: %s\n", arquivoSaida)
@@ -94,7 +83,7 @@ func (l *LLVMBackend) processarExpressao(expr parser.Expressao) value.Value {
 		if val, exists := l.variables[e.Nome]; exists {
 			return val
 		}
-		fmt.Printf("⚠️  Variável '%s' não definida\n", e.Nome)
+		fmt.Printf("Variável '%s' não definida\n", e.Nome)
 		return constant.NewInt(types.I64, 0)
 
 	case *parser.OperacaoBinaria:
@@ -109,7 +98,7 @@ func (l *LLVMBackend) processarExpressao(expr parser.Expressao) value.Value {
 		return l.processarFuncao(e)
 
 	default:
-		fmt.Printf("⚠️  Tipo de expressão não suportado: %T\n", expr)
+		fmt.Printf("Tipo de expressão não suportado: %T\n", expr)
 		return constant.NewInt(types.I64, 0)
 	}
 }
@@ -153,7 +142,7 @@ func (l *LLVMBackend) processarOperacao(op *parser.OperacaoBinaria) value.Value 
 		return l.block.NewFPToSI(powResult, types.I64)
 
 	default:
-		fmt.Printf("⚠️  Operador não suportado: %s\n", op.Operador.String())
+		fmt.Printf("Operador não suportado: %s\n", op.Operador.String())
 		return constant.NewInt(types.I64, 0)
 	}
 }
@@ -211,7 +200,7 @@ func (l *LLVMBackend) processarFuncao(fn *parser.ChamadaFuncao) value.Value {
 		return constant.NewInt(types.I64, 0)
 
 	default:
-		fmt.Printf("⚠️  Função '%s' não implementada\n", fn.Nome)
+		fmt.Printf("Função '%s' não implementada\n", fn.Nome)
 		return constant.NewInt(types.I64, 0)
 	}
 }
