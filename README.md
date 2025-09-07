@@ -1,16 +1,8 @@
-# Compilador Solar ☀️
+# solar
 
-Um compilador moderno para a linguagem Solar com múltiplos backends de execução.
+Compilador para a linguagem Solar com múltiplos backends de execução.
 
-## 🌟 Destaques
-
-- **🎯 Múltiplos Backends**: Interpretador, Bytecode + VM, Assembly nativo
-- **🧮 Precedência de Operadores**: Parsing inteligente sem parênteses obrigatórios
-- **🔧 Funções Builtin**: `imprime()`, `soma()`, `abs()` extensíveis
-- **🏗️ Arquiteturas**: x86-64 (Linux) e ARM64 (macOS)
-- **🌳 Visualização AST**: Árvore sintática gráfica
-
-## 📋 Índice
+## Índice
 
 - [Instalação](#-instalação)
 - [Como Usar](#-como-usar)
@@ -19,18 +11,18 @@ Um compilador moderno para a linguagem Solar com múltiplos backends de execuç�
 - [Backends](#-backends)
 - [Desenvolvimento](#-desenvolvimento)
 
-## 🚀 Instalação
+## Instalação
 
 ```bash
 # Clonar repositório
-git clone https://github.com/khevencolino/Solar.git
-cd Solar
+git clone https://github.com/khevencolino/solar.git
+cd solar
 
 # Construir compilador
 make build
 ```
 
-## 📖 Como Usar
+## Como Usar
 
 ```bash
 # Ajuda
@@ -59,7 +51,7 @@ go run cmd/compiler/main.go -backend=bytecode arquivo.solar
 go run cmd/compiler/main.go -backend=assembly -arch=arm64 arquivo.solar
 ```
 
-## 🧪 Exemplos
+## Exemplos
 
 ### Precedência de Operadores
 
@@ -96,26 +88,7 @@ Resultado: 15
 Resultado: 15
 ```
 
-### Expressões Complexas
-
-```solar
-imprime(soma(2, 3), abs(-7))
-```
-
-### Testando
-
-```bash
-# Interpretador
-make run FILE=exemplos/operacao/valido.solar
-
-# Bytecode
-make run FILE=exemplos/funcoes_builtin/teste_simples.solar BACKEND=bytecode
-
-# Assembly
-make run FILE=exemplos/power/valido.solar BACKEND=assembly
-```
-
-## 🔧 Backends
+## Backends
 
 ### Interpretador
 
@@ -135,16 +108,6 @@ make run FILE=arquivo.solar BACKEND=bytecode
 make run FILE=arquivo.solar BACKEND=assembly
 ```
 
-## 🛠️ Desenvolvimento
-
-### Build
-
-```bash
-make build       # Compilar
-make run FILE=exemplo.solar    # Executar
-make clean       # Limpar
-```
-
 ### Estrutura
 
 - `cmd/` - CLI principal
@@ -161,6 +124,6 @@ make clean       # Limpar
 
 ---
 
-## � Licença
+## Licença
 
 MIT License
