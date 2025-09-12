@@ -25,7 +25,7 @@ func (i *InterpreterBackend) GetName() string      { return "Interpretador AST" 
 func (i *InterpreterBackend) GetExtension() string { return "" }
 
 func (i *InterpreterBackend) Compile(statements []parser.Expressao) error {
-	debug.Printf("🔍 Interpretando diretamente da AST...\n")
+	debug.Printf("Interpretando diretamente da AST...\n")
 
 	var ultimoResultado interface{}
 
@@ -46,7 +46,7 @@ func (i *InterpreterBackend) Compile(statements []parser.Expressao) error {
 		ultimoResultado = resultado
 	}
 
-	debug.Printf("\n✅ Interpretação concluída! Resultado final: %d\n", ultimoResultado)
+	debug.Printf("\n Interpretação concluída! Resultado final: %d\n", ultimoResultado)
 	return nil
 }
 
@@ -125,6 +125,38 @@ func (i *InterpreterBackend) OperacaoBinaria(operacao *parser.OperacaoBinaria) i
 		return esquerdo / direito
 	case parser.POWER:
 		return int(math.Pow(float64(esquerdo), float64(direito)))
+
+	// Operações de comparação
+	case parser.IGUALDADE:
+		if esquerdo == direito {
+			return 1
+		}
+		return 0
+	case parser.DIFERENCA:
+		if esquerdo != direito {
+			return 1
+		}
+		return 0
+	case parser.MENOR_QUE:
+		if esquerdo < direito {
+			return 1
+		}
+		return 0
+	case parser.MAIOR_QUE:
+		if esquerdo > direito {
+			return 1
+		}
+		return 0
+	case parser.MENOR_IGUAL:
+		if esquerdo <= direito {
+			return 1
+		}
+		return 0
+	case parser.MAIOR_IGUAL:
+		if esquerdo >= direito {
+			return 1
+		}
+		return 0
 	default:
 		return utils.NovoErro(
 			"operador desconhecido",
@@ -220,4 +252,41 @@ func (i *InterpreterBackend) executarImprime(args []interface{}) interface{} {
 	}
 	fmt.Println()
 	return 0
+}
+
+// ComandoSe implementa o comando if/else
+func (i *InterpreterBackend) ComandoSe(comando *parser.ComandoSe) interface{} {
+	// Avalia a condição
+	condicaoInterface := comando.Condicao.Aceitar(i)
+	if erro, ok := condicaoInterface.(error); ok {
+		return erro
+	}
+	condicao := condicaoInterface.(int)
+
+	// Se a condição for verdadeira (não zero), executa o bloco "se"
+	if condicao != 0 {
+		return comando.BlocoSe.Aceitar(i)
+	} else if comando.BlocoSenao != nil {
+		// Se há bloco "senao" e a condição é falsa, executa o bloco "senao"
+		return comando.BlocoSenao.Aceitar(i)
+	}
+
+	// Se não há bloco "senao" e a condição é falsa, retorna 0
+	return 0
+}
+
+// Bloco implementa um bloco de comandos
+func (i *InterpreterBackend) Bloco(bloco *parser.Bloco) interface{} {
+	var ultimoResultado interface{} = 0
+
+	// Executa todos os comandos do bloco
+	for _, comando := range bloco.Comandos {
+		resultado := comando.Aceitar(i)
+		if erro, ok := resultado.(error); ok {
+			return erro
+		}
+		ultimoResultado = resultado
+	}
+
+	return ultimoResultado
 }

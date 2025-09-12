@@ -13,6 +13,7 @@ type Precedencia int
 
 const (
 	PRECEDENCIA_NENHUMA       Precedencia = iota
+	PRECEDENCIA_COMPARACAO                // == != < > <= >=
 	PRECEDENCIA_SOMA                      // + -
 	PRECEDENCIA_MULTIPLICACAO             // * /
 	PRECEDENCIA_POTENCIA                  // **
@@ -27,6 +28,8 @@ type Parser struct {
 // obterPrecedencia retorna a precedência de um operador
 func (p *Parser) obterPrecedencia(tokenType lexer.TokenType) Precedencia {
 	switch tokenType {
+	case lexer.EQUAL, lexer.NOT_EQUAL, lexer.LESS, lexer.GREATER, lexer.LESS_EQUAL, lexer.GREATER_EQUAL:
+		return PRECEDENCIA_COMPARACAO
 	case lexer.PLUS, lexer.MINUS:
 		return PRECEDENCIA_SOMA
 	case lexer.MULTIPLY, lexer.DIVIDE:
@@ -74,6 +77,11 @@ func (p *Parser) AnalisarPrograma() ([]Expressao, error) {
 func (p *Parser) analisarStatement() (Expressao, error) {
 	token := p.tokenAtual()
 
+	// Verifica se é um comando "se"
+	if token.Type == lexer.SE {
+		return p.analisarComandoSe()
+	}
+
 	// Verifica se é uma atribuição
 	if token.Type == lexer.IDENTIFIER {
 		p.proximoToken() // consome o identificador
@@ -109,7 +117,7 @@ func (p *Parser) analisarExpressao(precedenciaMinima Precedencia) (Expressao, er
 		tokenAtual := p.tokenAtual()
 
 		// Se chegou ao fim ou não é um operador binário, para
-		if tokenAtual.Type == lexer.EOF || tokenAtual.Type == lexer.RPAREN {
+		if tokenAtual.Type == lexer.EOF || tokenAtual.Type == lexer.RPAREN || tokenAtual.Type == lexer.LBRACE {
 			break
 		}
 
@@ -212,12 +220,24 @@ func (p *Parser) tokenParaOperador(token lexer.Token) (TipoOperador, error) {
 		return POWER, nil
 	case lexer.DIVIDE:
 		return DIVISAO, nil
+	case lexer.EQUAL:
+		return IGUALDADE, nil
+	case lexer.NOT_EQUAL:
+		return DIFERENCA, nil
+	case lexer.LESS:
+		return MENOR_QUE, nil
+	case lexer.GREATER:
+		return MAIOR_QUE, nil
+	case lexer.LESS_EQUAL:
+		return MENOR_IGUAL, nil
+	case lexer.GREATER_EQUAL:
+		return MAIOR_IGUAL, nil
 	default:
 		return 0, utils.NovoErro(
 			"operador inválido",
 			token.Position.Line,
 			token.Position.Column,
-			fmt.Sprintf("esperado operador (+, -, *, /, **), encontrado '%s'", token.Value),
+			fmt.Sprintf("esperado operador (+, -, *, /, **, ==, !=, <, >, <=, >=), encontrado '%s'", token.Value),
 		)
 	}
 }
@@ -298,4 +318,74 @@ func (p *Parser) tokenAtual() lexer.Token {
 func (p *Parser) chegouAoFim() bool {
 	return p.posicaoAtual >= len(p.tokens) ||
 		(p.posicaoAtual < len(p.tokens) && p.tokens[p.posicaoAtual].Type == lexer.EOF)
+}
+
+// analisarComandoSe analisa um comando if/else
+func (p *Parser) analisarComandoSe() (Expressao, error) {
+	tokenSe := p.proximoToken() // consome "se"
+
+	// Analisa a condição
+	condicao, err := p.analisarExpressao(PRECEDENCIA_NENHUMA)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao analisar condição do 'se': %v", err)
+	}
+
+	// Espera '{'
+	if err := p.verificarProximoToken(lexer.LBRACE); err != nil {
+		return nil, fmt.Errorf("esperado '{' após condição do 'se': %v", err)
+	}
+
+	// Analisa o bloco do "se"
+	blocoSe, err := p.analisarBloco()
+	if err != nil {
+		return nil, fmt.Errorf("erro ao analisar bloco 'se': %v", err)
+	}
+
+	// Verifica se há "senao"
+	var blocoSenao *Bloco
+	if p.tokenAtual().Type == lexer.SENAO {
+		p.proximoToken() // consome "senao"
+
+		// Espera '{'
+		if err := p.verificarProximoToken(lexer.LBRACE); err != nil {
+			return nil, err
+		}
+
+		blocoSenao, err = p.analisarBloco()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &ComandoSe{
+		Condicao:   condicao,
+		BlocoSe:    blocoSe,
+		BlocoSenao: blocoSenao,
+		Token:      tokenSe,
+	}, nil
+}
+
+// analisarBloco analisa um bloco de comandos
+func (p *Parser) analisarBloco() (*Bloco, error) {
+	var comandos []Expressao
+	tokenInicio := p.tokenAtual()
+
+	// Processa comandos até encontrar '}'
+	for !p.chegouAoFim() && p.tokenAtual().Type != lexer.RBRACE {
+		comando, err := p.analisarStatement()
+		if err != nil {
+			return nil, err
+		}
+		comandos = append(comandos, comando)
+	}
+
+	// Espera '}'
+	if err := p.verificarProximoToken(lexer.RBRACE); err != nil {
+		return nil, err
+	}
+
+	return &Bloco{
+		Comandos: comandos,
+		Token:    tokenInicio,
+	}, nil
 }

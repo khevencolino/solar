@@ -13,8 +13,9 @@ import (
 )
 
 type X86_64Backend struct {
-	output    strings.Builder
-	variables map[string]bool
+	output     strings.Builder
+	variables  map[string]bool
+	labelCount int
 }
 
 func NewX86_64Backend() *X86_64Backend {
@@ -110,6 +111,32 @@ func (a *X86_64Backend) OperacaoBinaria(operacao *parser.OperacaoBinaria) interf
 		a.output.WriteString("    dec %rbx\n")        // decrementa o expoente
 		a.output.WriteString("    jnz .pow_loop\n")   // se o expoente ainda não for zero, repete o loop
 		a.output.WriteString(".pow_done:\n")          // fim da exponenciação; %rax contém o resultado final
+
+	// Operações de comparação
+	case parser.IGUALDADE:
+		a.output.WriteString("    cmp %rbx, %rax\n")
+		a.output.WriteString("    sete %al\n")
+		a.output.WriteString("    movzx %al, %rax\n")
+	case parser.DIFERENCA:
+		a.output.WriteString("    cmp %rbx, %rax\n")
+		a.output.WriteString("    setne %al\n")
+		a.output.WriteString("    movzx %al, %rax\n")
+	case parser.MENOR_QUE:
+		a.output.WriteString("    cmp %rbx, %rax\n")
+		a.output.WriteString("    setl %al\n")
+		a.output.WriteString("    movzx %al, %rax\n")
+	case parser.MAIOR_QUE:
+		a.output.WriteString("    cmp %rbx, %rax\n")
+		a.output.WriteString("    setg %al\n")
+		a.output.WriteString("    movzx %al, %rax\n")
+	case parser.MENOR_IGUAL:
+		a.output.WriteString("    cmp %rbx, %rax\n")
+		a.output.WriteString("    setle %al\n")
+		a.output.WriteString("    movzx %al, %rax\n")
+	case parser.MAIOR_IGUAL:
+		a.output.WriteString("    cmp %rbx, %rax\n")
+		a.output.WriteString("    setge %al\n")
+		a.output.WriteString("    movzx %al, %rax\n")
 	}
 
 	return nil
@@ -215,6 +242,52 @@ func (a *X86_64Backend) gerarEpilogo() {
 		a.output.Reset()
 		a.output.WriteString(fullCode)
 	}
+}
+
+func (a *X86_64Backend) ComandoSe(comando *parser.ComandoSe) interface{} {
+	// Gera um label único para este comando if
+	labelFim := fmt.Sprintf(".if_fim_%d", a.labelCount)
+	labelSenao := fmt.Sprintf(".if_senao_%d", a.labelCount)
+	a.labelCount++
+
+	// Avalia a condição
+	comando.Condicao.Aceitar(a)
+
+	// Testa se o resultado da condição é 0 (falso)
+	a.output.WriteString("    test %rax, %rax\n")
+
+	if comando.BlocoSenao != nil {
+		// Se há bloco senao, pula para o label senao se for falso
+		a.output.WriteString(fmt.Sprintf("    jz %s\n", labelSenao))
+	} else {
+		// Se não há bloco senao, pula para o fim se for falso
+		a.output.WriteString(fmt.Sprintf("    jz %s\n", labelFim))
+	}
+
+	// Executa o bloco do "se"
+	comando.BlocoSe.Aceitar(a)
+
+	if comando.BlocoSenao != nil {
+		// Pula para o fim após executar o bloco "se"
+		a.output.WriteString(fmt.Sprintf("    jmp %s\n", labelFim))
+
+		// Label para o bloco "senao"
+		a.output.WriteString(fmt.Sprintf("%s:\n", labelSenao))
+		comando.BlocoSenao.Aceitar(a)
+	}
+
+	// Label para o fim do comando if
+	a.output.WriteString(fmt.Sprintf("%s:\n", labelFim))
+
+	return nil
+}
+
+func (a *X86_64Backend) Bloco(bloco *parser.Bloco) interface{} {
+	// Executa todos os comandos do bloco
+	for _, comando := range bloco.Comandos {
+		comando.Aceitar(a)
+	}
+	return nil
 }
 
 func (a *X86_64Backend) declararVariavel(nome string) {

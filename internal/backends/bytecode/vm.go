@@ -24,7 +24,7 @@ func NewVM(varCount int) *VM {
 }
 
 func (vm *VM) Execute(instructions []Instruction) error {
-	debug.Printf("📊 Bytecode gerado (%d instruções):\n", len(instructions))
+	debug.Printf("Bytecode gerado (%d instruções):\n", len(instructions))
 	if debug.Enabled {
 		for i, instr := range instructions {
 			debug.Printf("  %03d: %s %d\n", i, instr.OpCode, instr.Operand)
@@ -32,7 +32,7 @@ func (vm *VM) Execute(instructions []Instruction) error {
 		debug.Println()
 	}
 
-	debug.Printf("🏃 Executando...\n")
+	debug.Printf("Executando...\n")
 
 	for vm.pc < len(instructions) {
 		instr := instructions[vm.pc]
@@ -59,7 +59,7 @@ func (vm *VM) Execute(instructions []Instruction) error {
 		case OP_POW:
 			b := vm.pop()
 			a := vm.pop()
-			vm.push(int64(math.Pow(float64(b), float64(a))))
+			vm.push(int64(math.Pow(float64(a), float64(b))))
 
 		case OP_DIV:
 			b := vm.pop()
@@ -87,8 +87,73 @@ func (vm *VM) Execute(instructions []Instruction) error {
 			fmt.Printf("Resultado: %d\n", vm.peek())
 
 		case OP_HALT:
-			debug.Printf("✅ Execução concluída!\n")
+			debug.Printf("Execução concluída!\n")
 			return nil
+
+		// Operações de comparação
+		case OP_EQ:
+			b := vm.pop()
+			a := vm.pop()
+			if a == b {
+				vm.push(1)
+			} else {
+				vm.push(0)
+			}
+
+		case OP_NE:
+			b := vm.pop()
+			a := vm.pop()
+			if a != b {
+				vm.push(1)
+			} else {
+				vm.push(0)
+			}
+
+		case OP_LT:
+			b := vm.pop()
+			a := vm.pop()
+			if a < b {
+				vm.push(1)
+			} else {
+				vm.push(0)
+			}
+
+		case OP_GT:
+			b := vm.pop()
+			a := vm.pop()
+			if a > b {
+				vm.push(1)
+			} else {
+				vm.push(0)
+			}
+
+		case OP_LE:
+			b := vm.pop()
+			a := vm.pop()
+			if a <= b {
+				vm.push(1)
+			} else {
+				vm.push(0)
+			}
+
+		case OP_GE:
+			b := vm.pop()
+			a := vm.pop()
+			if a >= b {
+				vm.push(1)
+			} else {
+				vm.push(0)
+			}
+
+		// Estruturas de controle
+		case OP_JMP:
+			vm.pc = int(instr.Operand) - 1 // -1 porque pc será incrementado no final do loop
+
+		case OP_JF:
+			condition := vm.pop()
+			if condition == 0 { // falso
+				vm.pc = int(instr.Operand) - 1 // -1 porque pc será incrementado no final do loop
+			}
 
 		default:
 			return fmt.Errorf("opcode desconhecido: %d", instr.OpCode)

@@ -13,6 +13,8 @@ type Node interface {
 	Variavel(variavel *Variavel) interface{}
 	Atribuicao(atribuicao *Atribuicao) interface{}
 	ChamadaFuncao(chamada *ChamadaFuncao) interface{}
+	ComandoSe(comando *ComandoSe) interface{}
+	Bloco(bloco *Bloco) interface{}
 }
 
 // Expressao representa a interface base para todos os nós da AST
@@ -67,6 +69,13 @@ const (
 	MULTIPLICACAO
 	DIVISAO
 	POWER
+	// Operadores de comparação
+	IGUALDADE
+	DIFERENCA
+	MENOR_QUE
+	MAIOR_QUE
+	MENOR_IGUAL
+	MAIOR_IGUAL
 )
 
 // String retorna representação em string do operador
@@ -82,6 +91,18 @@ func (t TipoOperador) String() string {
 		return "/"
 	case POWER:
 		return "**"
+	case IGUALDADE:
+		return "=="
+	case DIFERENCA:
+		return "!="
+	case MENOR_QUE:
+		return "<"
+	case MAIOR_QUE:
+		return ">"
+	case MENOR_IGUAL:
+		return "<="
+	case MAIOR_IGUAL:
+		return ">="
 	default:
 		return "?"
 	}
@@ -136,4 +157,45 @@ func (c *ChamadaFuncao) String() string {
 		args += arg.String()
 	}
 	return fmt.Sprintf("%s(%s)", c.Nome, args)
+}
+
+// ComandoSe representa um comando if/else na árvore
+type ComandoSe struct {
+	Condicao   Expressao
+	BlocoSe    *Bloco
+	BlocoSenao *Bloco // pode ser nil se não há else
+	Token      lexer.Token
+}
+
+func (c *ComandoSe) Aceitar(node Node) interface{} {
+	return node.ComandoSe(c)
+}
+
+func (c *ComandoSe) String() string {
+	str := fmt.Sprintf("se (%s) %s", c.Condicao.String(), c.BlocoSe.String())
+	if c.BlocoSenao != nil {
+		str += fmt.Sprintf(" senao %s", c.BlocoSenao.String())
+	}
+	return str
+}
+
+// Bloco representa um bloco de comandos na árvore
+type Bloco struct {
+	Comandos []Expressao
+	Token    lexer.Token
+}
+
+func (b *Bloco) Aceitar(node Node) interface{} {
+	return node.Bloco(b)
+}
+
+func (b *Bloco) String() string {
+	comandosStr := ""
+	for i, comando := range b.Comandos {
+		if i > 0 {
+			comandosStr += "; "
+		}
+		comandosStr += comando.String()
+	}
+	return fmt.Sprintf("{ %s }", comandosStr)
 }

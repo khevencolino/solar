@@ -85,6 +85,20 @@ func (b *BytecodeBackend) OperacaoBinaria(operacao *parser.OperacaoBinaria) inte
 		b.emit(OP_DIV, 0, operacao.Token.Position.Line)
 	case parser.POWER:
 		b.emit(OP_POW, 0, operacao.Token.Position.Line)
+
+	// Operações de comparação
+	case parser.IGUALDADE:
+		b.emit(OP_EQ, 0, operacao.Token.Position.Line)
+	case parser.DIFERENCA:
+		b.emit(OP_NE, 0, operacao.Token.Position.Line)
+	case parser.MENOR_QUE:
+		b.emit(OP_LT, 0, operacao.Token.Position.Line)
+	case parser.MAIOR_QUE:
+		b.emit(OP_GT, 0, operacao.Token.Position.Line)
+	case parser.MENOR_IGUAL:
+		b.emit(OP_LE, 0, operacao.Token.Position.Line)
+	case parser.MAIOR_IGUAL:
+		b.emit(OP_GE, 0, operacao.Token.Position.Line)
 	}
 	return nil
 }
@@ -144,6 +158,52 @@ func (b *BytecodeBackend) declareVariable(nome string) int {
 	b.variables[nome] = index
 	b.varCount++
 	return index
+}
+
+// ComandoSe gera bytecode para comandos if/else
+func (b *BytecodeBackend) ComandoSe(comando *parser.ComandoSe) interface{} {
+	// Avalia a condição
+	comando.Condicao.Aceitar(b)
+
+	// Endereços de pulo (serão preenchidos depois)
+	jumpToElseAddr := len(b.instructions)
+	b.emit(OP_JF, -1, comando.Token.Position.Line) // pulo para else se falso
+
+	// Gera código para o bloco "se"
+	comando.BlocoSe.Aceitar(b)
+
+	// Se há bloco "senao"
+	if comando.BlocoSenao != nil {
+		// Pulo incondicional para o fim após executar bloco "se"
+		jumpToEndAddr := len(b.instructions)
+		b.emit(OP_JMP, -1, comando.Token.Position.Line)
+
+		// Atualiza endereço do pulo para "senao"
+		elseStart := len(b.instructions)
+		b.instructions[jumpToElseAddr].Operand = int64(elseStart)
+
+		// Gera código para o bloco "senao"
+		comando.BlocoSenao.Aceitar(b)
+
+		// Atualiza endereço do pulo para o fim
+		endAddr := len(b.instructions)
+		b.instructions[jumpToEndAddr].Operand = int64(endAddr)
+	} else {
+		// Se não há "senao", apenas atualiza o pulo para o fim
+		endAddr := len(b.instructions)
+		b.instructions[jumpToElseAddr].Operand = int64(endAddr)
+	}
+
+	return nil
+}
+
+// Bloco gera bytecode para um bloco de comandos
+func (b *BytecodeBackend) Bloco(bloco *parser.Bloco) interface{} {
+	// Processa todos os comandos do bloco
+	for _, comando := range bloco.Comandos {
+		comando.Aceitar(b)
+	}
+	return nil
 }
 
 func (b *BytecodeBackend) getVariableIndex(nome string) int {

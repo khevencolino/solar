@@ -14,6 +14,18 @@ const (
 	OP_PRINT               // PRINT
 	OP_HALT                // HALT
 	OP_POW                 // POWER
+
+	// Operações de comparação
+	OP_EQ // EQUAL (==)
+	OP_NE // NOT_EQUAL (!=)
+	OP_LT // LESS_THAN (<)
+	OP_GT // GREATER_THAN (>)
+	OP_LE // LESS_EQUAL (<=)
+	OP_GE // GREATER_EQUAL (>=)
+
+	// Estruturas de controle
+	OP_JMP // JMP endereço (pulo incondicional)
+	OP_JF  // JF endereço (pulo se falso)
 )
 
 type Instruction struct {
@@ -46,6 +58,22 @@ func (op OpCode) String() string {
 		return "HALT"
 	case OP_POW:
 		return "POWER"
+	case OP_EQ:
+		return "EQ"
+	case OP_NE:
+		return "NE"
+	case OP_LT:
+		return "LT"
+	case OP_GT:
+		return "GT"
+	case OP_LE:
+		return "LE"
+	case OP_GE:
+		return "GE"
+	case OP_JMP:
+		return "JMP"
+	case OP_JF:
+		return "JF"
 	default:
 		return "UNKNOWN"
 	}

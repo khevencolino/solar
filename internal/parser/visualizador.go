@@ -86,6 +86,38 @@ func (v *VisualizadorArvore) criarArvoreRecursiva(expressao Expressao) *tree.Tre
 		}
 		return arvore
 
+	case *ComandoSe:
+		arvore := tree.NewTree(tree.NodeString("se"))
+
+		// Adiciona condição
+		condicaoArvore := v.criarArvoreRecursiva(expr.Condicao)
+		v.adicionarSubarvore(arvore, condicaoArvore)
+
+		// Adiciona bloco "se"
+		blocoSeArvore := v.criarArvoreRecursiva(expr.BlocoSe)
+		v.adicionarSubarvore(arvore, blocoSeArvore)
+
+		// Adiciona bloco "senao" se existir
+		if expr.BlocoSenao != nil {
+			blocoSenaoArvore := v.criarArvoreRecursiva(expr.BlocoSenao)
+			senaoArvore := tree.NewTree(tree.NodeString("senao"))
+			v.adicionarSubarvore(senaoArvore, blocoSenaoArvore)
+			v.adicionarSubarvore(arvore, senaoArvore)
+		}
+
+		return arvore
+
+	case *Bloco:
+		arvore := tree.NewTree(tree.NodeString("bloco"))
+
+		// Adiciona cada comando do bloco
+		for _, comando := range expr.Comandos {
+			comandoArvore := v.criarArvoreRecursiva(comando)
+			v.adicionarSubarvore(arvore, comandoArvore)
+		}
+
+		return arvore
+
 	default:
 		return tree.NewTree(tree.NodeString("ERRO"))
 	}

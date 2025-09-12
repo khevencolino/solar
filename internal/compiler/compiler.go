@@ -107,5 +107,12 @@ func (c *Compiler) tokenizar(conteudo string) ([]lexer.Token, error) {
 
 func (c *Compiler) analisarSintaxe(tokens []lexer.Token) ([]parser.Expressao, error) {
 	c.parser = parser.NovoParser(tokens)
-	return c.parser.AnalisarPrograma()
+	statements, err := c.parser.AnalisarPrograma()
+	if err != nil {
+		if c.debug {
+			fmt.Printf("Erro no parser: %v\n", err)
+		}
+		return nil, err
+	}
+	return statements, nil
 }

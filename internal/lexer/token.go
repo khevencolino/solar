@@ -23,6 +23,18 @@ const (
 	WHITESPACE                  // Espaços em branco
 	EOF                         // Fim do arquivo
 	INVALID                     // Token inválido
+
+	// Tokens para estruturas de controle
+	SE            // Comando "se" (if)
+	SENAO         // Comando "senao" (else)
+	LBRACE        // Chave esquerda {
+	RBRACE        // Chave direita }
+	EQUAL         // Operador de igualdade ==
+	NOT_EQUAL     // Operador de diferença !=
+	LESS          // Operador menor que <
+	GREATER       // Operador maior que >
+	LESS_EQUAL    // Operador menor ou igual <=
+	GREATER_EQUAL // Operador maior ou igual >=
 )
 
 // String retorna uma representação em string do tipo de token
@@ -60,6 +72,26 @@ func (t TokenType) String() string {
 		return "COMMA"
 	case INVALID:
 		return "INVALID"
+	case SE:
+		return "SE"
+	case SENAO:
+		return "SENAO"
+	case LBRACE:
+		return "LBRACE"
+	case RBRACE:
+		return "RBRACE"
+	case EQUAL:
+		return "EQUAL"
+	case NOT_EQUAL:
+		return "NOT_EQUAL"
+	case LESS:
+		return "LESS"
+	case GREATER:
+		return "GREATER"
+	case LESS_EQUAL:
+		return "LESS_EQUAL"
+	case GREATER_EQUAL:
+		return "GREATER_EQUAL"
 	default:
 		return "UNKNOWN"
 	}

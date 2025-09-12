@@ -33,7 +33,7 @@ func (l *LLVMBackend) GetName() string      { return "LLVM IR" }
 func (l *LLVMBackend) GetExtension() string { return ".ll" }
 
 func (l *LLVMBackend) Compile(statements []parser.Expressao) error {
-	debug.Printf("🔧 Compilando para LLVM IR...\n")
+	debug.Printf("Compilando para LLVM IR...\n")
 
 	// Inicializa módulo LLVM
 	l.module = ir.NewModule()
@@ -70,7 +70,7 @@ func (l *LLVMBackend) Compile(statements []parser.Expressao) error {
 		return err
 	}
 
-	debug.Printf("✅ Arquivo LLVM IR gerado em: %s\n", arquivoSaida)
+	debug.Printf("Arquivo LLVM IR gerado em: %s\n", arquivoSaida)
 	return nil
 }
 
@@ -96,6 +96,12 @@ func (l *LLVMBackend) processarExpressao(expr parser.Expressao) value.Value {
 
 	case *parser.ChamadaFuncao:
 		return l.processarFuncao(e)
+
+	case *parser.ComandoSe:
+		return l.processarComandoSe(e)
+
+	case *parser.Bloco:
+		return l.processarBloco(e)
 
 	default:
 		fmt.Printf("Tipo de expressão não suportado: %T\n", expr)
@@ -140,6 +146,31 @@ func (l *LLVMBackend) processarOperacao(op *parser.OperacaoBinaria) value.Value 
 		powResult := l.block.NewCall(pow, esquerdaDouble, direitaDouble)
 		// Converte de volta para inteiro
 		return l.block.NewFPToSI(powResult, types.I64)
+
+	// Operações de comparação
+	case parser.IGUALDADE:
+		cmp := l.block.NewICmp(enum.IPredEQ, esquerda, direita)
+		return l.block.NewZExt(cmp, types.I64)
+
+	case parser.DIFERENCA:
+		cmp := l.block.NewICmp(enum.IPredNE, esquerda, direita)
+		return l.block.NewZExt(cmp, types.I64)
+
+	case parser.MENOR_QUE:
+		cmp := l.block.NewICmp(enum.IPredSLT, esquerda, direita)
+		return l.block.NewZExt(cmp, types.I64)
+
+	case parser.MAIOR_QUE:
+		cmp := l.block.NewICmp(enum.IPredSGT, esquerda, direita)
+		return l.block.NewZExt(cmp, types.I64)
+
+	case parser.MENOR_IGUAL:
+		cmp := l.block.NewICmp(enum.IPredSLE, esquerda, direita)
+		return l.block.NewZExt(cmp, types.I64)
+
+	case parser.MAIOR_IGUAL:
+		cmp := l.block.NewICmp(enum.IPredSGE, esquerda, direita)
+		return l.block.NewZExt(cmp, types.I64)
 
 	default:
 		fmt.Printf("Operador não suportado: %s\n", op.Operador.String())
@@ -227,4 +258,64 @@ func (l *LLVMBackend) imprimirValor(valor value.Value) {
 	// Chama printf
 	printf := l.module.Funcs[0] // printf é a primeira função declarada
 	l.block.NewCall(printf, formatPtr, printValue)
+}
+
+// processarComandoSe processa comandos if/else
+func (l *LLVMBackend) processarComandoSe(comando *parser.ComandoSe) value.Value {
+	// Avalia a condição
+	condicao := l.processarExpressao(comando.Condicao)
+
+	// Converte para i1 (boolean)
+	zero := constant.NewInt(types.I64, 0)
+	cond := l.block.NewICmp(enum.IPredNE, condicao, zero)
+
+	// Cria blocos
+	thenBlock := l.function.NewBlock("")
+	var elseBlock *ir.Block
+	mergeBlock := l.function.NewBlock("")
+
+	if comando.BlocoSenao != nil {
+		elseBlock = l.function.NewBlock("")
+		l.block.NewCondBr(cond, thenBlock, elseBlock)
+	} else {
+		l.block.NewCondBr(cond, thenBlock, mergeBlock)
+	}
+
+	// Processa bloco "se"
+	l.block = thenBlock
+	thenValue := l.processarBloco(comando.BlocoSe)
+	l.block.NewBr(mergeBlock)
+
+	var elseValue value.Value
+	if comando.BlocoSenao != nil {
+		// Processa bloco "senao"
+		l.block = elseBlock
+		elseValue = l.processarBloco(comando.BlocoSenao)
+		l.block.NewBr(mergeBlock)
+	} else {
+		elseValue = constant.NewInt(types.I64, 0)
+	}
+
+	// Merge block
+	l.block = mergeBlock
+	if comando.BlocoSenao != nil {
+		phi := mergeBlock.NewPhi(ir.NewIncoming(thenValue, thenBlock), ir.NewIncoming(elseValue, elseBlock))
+		return phi
+	}
+
+	return thenValue
+}
+
+// processarBloco processa um bloco de comandos
+func (l *LLVMBackend) processarBloco(bloco *parser.Bloco) value.Value {
+	var ultimoValor value.Value = constant.NewInt(types.I64, 0)
+
+	for _, comando := range bloco.Comandos {
+		val := l.processarExpressao(comando)
+		if val != nil {
+			ultimoValor = val
+		}
+	}
+
+	return ultimoValor
 }

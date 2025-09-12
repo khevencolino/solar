@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/khevencolino/Solar/internal/backends"
-	"github.com/khevencolino/Solar/internal/backends/assembly/x86_64"
+	"github.com/khevencolino/Solar/internal/backends/assembly/linux/x86_64"
 	"github.com/khevencolino/Solar/internal/parser"
 )
 
