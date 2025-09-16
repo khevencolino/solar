@@ -2,9 +2,11 @@ package x86_64
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"runtime"
 
 	"github.com/khevencolino/Solar/internal/debug"
 	"github.com/khevencolino/Solar/internal/parser"
@@ -28,7 +30,7 @@ func (a *X86_64Backend) GetName() string      { return "Assembly x86-64" }
 func (a *X86_64Backend) GetExtension() string { return ".s" }
 
 func (a *X86_64Backend) Compile(statements []parser.Expressao) error {
-	debug.Printf("🔧 Compilando para Assembly x86-64...\n")
+	debug.Printf("Compilando para Assembly x86-64...\n")
 
 	a.gerarPrologo()
 
@@ -37,9 +39,18 @@ func (a *X86_64Backend) Compile(statements []parser.Expressao) error {
 		debug.Printf("  Processando statement %d...\n", i+1)
 		a.checarExpressao(stmt)
 
-		// Se for a última expressão, imprime resultado
+		// Se for a última expressão, imprime resultado somente se a expressão produz valor
 		if i == len(statements)-1 {
-			a.output.WriteString("    call imprime_num\n")
+			switch s := stmt.(type) {
+			case *parser.Constante, *parser.Variavel, *parser.OperacaoBinaria:
+				a.output.WriteString("    call imprime_num\n")
+			case *parser.ChamadaFuncao:
+				if sig, ok := registry.RegistroGlobal.ObterAssinatura(s.Nome); ok {
+					if sig.TipoFuncao == registry.FUNCAO_PURA {
+						a.output.WriteString("    call imprime_num\n")
+					}
+				}
+			}
 		}
 	}
 
@@ -102,15 +113,21 @@ func (a *X86_64Backend) OperacaoBinaria(operacao *parser.OperacaoBinaria) interf
 		a.output.WriteString("    cqo\n")
 		a.output.WriteString("    idiv %rbx\n")
 	case parser.POWER:
+		// Gera labels únicos para evitar colisão quando POWER aparece múltiplas vezes
+		id := a.labelCount
+		a.labelCount++
+		powLoop := fmt.Sprintf(".pow_loop_%d", id)
+		powDone := fmt.Sprintf(".pow_done_%d", id)
+
 		a.output.WriteString("    mov %rax, %rcx\n")  // copia a base de %rax para %rcx (base temporária)
 		a.output.WriteString("    mov $1, %rax\n")    // inicializa o resultado em %rax com 1 (valor neutro da multiplicação)
 		a.output.WriteString("    test %rbx, %rbx\n") // verifica se o expoente (%rbx) é zero
-		a.output.WriteString("    jz .pow_done\n")    // se for zero, pula para o final (qualquer número^0 = 1)
-		a.output.WriteString(".pow_loop:\n")
-		a.output.WriteString("    imul %rax, %rcx\n") // multiplica resultado (%rax) pela base (%rcx)
+		a.output.WriteString(fmt.Sprintf("    jz %s\n", powDone))
+		a.output.WriteString(fmt.Sprintf("%s:\n", powLoop))
+		a.output.WriteString("    imul %rcx, %rax\n") // multiplica resultado (%rax) pela base (%rcx)
 		a.output.WriteString("    dec %rbx\n")        // decrementa o expoente
-		a.output.WriteString("    jnz .pow_loop\n")   // se o expoente ainda não for zero, repete o loop
-		a.output.WriteString(".pow_done:\n")          // fim da exponenciação; %rax contém o resultado final
+		a.output.WriteString(fmt.Sprintf("    jnz %s\n", powLoop))
+		a.output.WriteString(fmt.Sprintf("%s:\n", powDone)) // fim da exponenciação; %rax contém o resultado final
 
 	// Operações de comparação
 	case parser.IGUALDADE:
@@ -213,16 +230,25 @@ func (a *X86_64Backend) gerarAssemblySoma(numArgs int) {
 
 // gerarAssemblyAbs gera assembly para valor absoluto
 func (a *X86_64Backend) gerarAssemblyAbs() {
+	// Usa um label único para evitar colisões
+	id := a.labelCount
+	a.labelCount++
+	label := fmt.Sprintf("abs_positive_%d", id)
+
 	a.output.WriteString("    pop %rax\n")
 	a.output.WriteString("    test %rax, %rax\n")
-	a.output.WriteString("    jns abs_positive\n")
+	a.output.WriteString(fmt.Sprintf("    jns %s\n", label))
 	a.output.WriteString("    neg %rax\n")
-	a.output.WriteString("abs_positive:\n")
+	a.output.WriteString(fmt.Sprintf("%s:\n", label))
 }
 
 func (a *X86_64Backend) gerarPrologo() {
-	a.output.WriteString(".section .data\n")
-	// Variáveis serão adicionadas dinamicamente
+	// Código do runtime deve ficar na seção .text
+	a.output.WriteString(".section .text\n")
+	a.output.WriteString(`.include "external/runtime.s"`)
+	// Cria um marcador da seção .data que será substituído no epílogo
+	a.output.WriteString("\n.section .data\n")
+	// Volta para .text para o ponto de entrada
 	a.output.WriteString("\n.section .text\n")
 	a.output.WriteString(".global _start\n\n")
 	a.output.WriteString("_start:\n")
@@ -299,11 +325,19 @@ func (a *X86_64Backend) getVarName(nome string) string {
 }
 
 func (a *X86_64Backend) compilarAssembly(arquivoAssembly string) error {
+	// Este backend gera binários ELF Linux x86_64. Em outros SOs, apenas gere o .s.
+	if runtime.GOOS != "linux" {
+		return fmt.Errorf("backend assembly linux só monta/linka em Linux; arquivo gerado: %s", arquivoAssembly)
+	}
 	debug.Printf("Criando arquivo executavel...\n")
 	debug.Printf("Linkando com runtime...\n")
 
 	objectFile := filepath.Join("result", "programa.o")
-	cmdAs := exec.Command("as", "-o", objectFile, arquivoAssembly)
+	// Garante que o diretório de saída existe
+	if err := os.MkdirAll(filepath.Dir(objectFile), 0o755); err != nil {
+		return fmt.Errorf("erro ao criar diretório de saída: %v", err)
+	}
+	cmdAs := exec.Command("as", "-I", ".", "-o", objectFile, arquivoAssembly)
 	if err := cmdAs.Run(); err != nil {
 		return fmt.Errorf("erro ao montar (as): %v", err)
 	}

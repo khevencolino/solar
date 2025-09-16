@@ -1,12 +1,12 @@
 // Teste com comandos "se" aninhados
-numero ~> 15
+numero ~> 15;
 
 se numero > 10 {
     se numero < 20 {
-        imprime(1) // deve imprimir 1
+        imprime(1); // deve imprimir 1
     } senao {
-        imprime(2)
+        imprime(2);
     }
 } senao {
-    imprime(3)
+    imprime(3);
 }

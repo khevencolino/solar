@@ -1,0 +1,19 @@
+// Teste de semicolons obrigatórios
+x ~> 10;
+y ~> 20;
+z ~> x + y;
+
+imprime(x);
+imprime(y);
+imprime(z);
+
+se x > 5 {
+    imprime(100);
+    imprime(x * 2);
+}
+
+se y > x {
+    imprime(200);
+} senao {
+    imprime(300);
+}

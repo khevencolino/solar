@@ -20,6 +20,7 @@ const (
 	IDENTIFIER                  // Identificador da variavel
 	FUNCTION                    // Função builtin
 	COMMA                       // Vírgula (,)
+	SEMICOLON                   // Ponto e vírgula (;)
 	WHITESPACE                  // Espaços em branco
 	EOF                         // Fim do arquivo
 	INVALID                     // Token inválido
@@ -70,6 +71,8 @@ func (t TokenType) String() string {
 		return "FUNCTION"
 	case COMMA:
 		return "COMMA"
+	case SEMICOLON:
+		return "SEMICOLON"
 	case INVALID:
 		return "INVALID"
 	case SE:

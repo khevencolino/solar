@@ -1,23 +1,23 @@
 // Teste com operadores de comparação
-a ~> 10
-b ~> 20
+a ~> 10;
+b ~> 20;
 
 se a == b {
-    imprime(1)
+    imprime(1);
 } senao {
-    imprime(0)
+    imprime(0);
 }
 
 se a != b {
-    imprime(2)
+    imprime(2);
 }
 
 se a <= b {
-    imprime(3)
+    imprime(3);
 }
 
 se a >= b {
-    imprime(4)
+    imprime(4);
 } senao {
-    imprime(5)
+    imprime(5);
 }

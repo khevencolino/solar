@@ -1,13 +1,13 @@
 // Teste das funções builtin com o novo sistema de registro
 
 // Testa função imprime
-imprime(42)
-imprime(10, 20, 30)
+imprime(42);
+imprime(10, 20, 30);
 
 // Testa função soma
-soma(5, 10)
-soma(1, 2, 3, 4)
+soma(5, 10);
+soma(1, 2, 3, 4);
 
 // Testa função abs (com números positivos por enquanto)
-abs(15)
-abs(25)
+abs(15);
+abs(25);

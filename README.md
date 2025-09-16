@@ -31,9 +31,6 @@ make help
 # Executar com interpretador (padrão)
 make run FILE=exemplos/operacao/valido.solar
 
-# Executar com bytecode + VM
-make run FILE=exemplos/operacao/valido.solar BACKEND=bytecode
-
 # Executar com assembly
 make run FILE=exemplos/operacao/valido.solar BACKEND=assembly
 
@@ -46,9 +43,6 @@ make run FILE=exemplos/operacao/valido.solar BACKEND=llvm
 ```bash
 # Interpretador
 go run cmd/compiler/main.go arquivo.solar
-
-# Bytecode
-go run cmd/compiler/main.go -backend=bytecode arquivo.solar
 
 # LLVM IR
 go run cmd/compiler/main.go -backend=llvm arquivo.solar
@@ -109,10 +103,6 @@ imprime(soma(2, 3), abs(-7))
 
 Execução direta da AST.
 
-### Bytecode + VM
-
-Compilação para bytecode próprio com máquina virtual.
-
 ### Assembly (x86-64)
 
 Geração de código nativo.
@@ -122,7 +112,6 @@ Geração de código nativo.
 Compilação para LLVM Intermediate Representation.
 
 ```bash
-make run FILE=arquivo.solar BACKEND=bytecode
 make run FILE=arquivo.solar BACKEND=assembly
 make run FILE=arquivo.solar BACKEND=llvm
 ```

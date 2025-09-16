@@ -5,7 +5,6 @@ import (
 
 	"github.com/khevencolino/Solar/internal/backends"
 	"github.com/khevencolino/Solar/internal/backends/assembly"
-	"github.com/khevencolino/Solar/internal/backends/bytecode"
 	"github.com/khevencolino/Solar/internal/backends/interpreter"
 	"github.com/khevencolino/Solar/internal/backends/llvm"
 	"github.com/khevencolino/Solar/internal/debug"
@@ -64,9 +63,6 @@ func (c *Compiler) executarBackend(statements []parser.Expressao, backendType st
 	case "interpreter", "interp", "ast":
 		backend = interpreter.NewInterpreterBackend()
 
-	case "bytecode", "vm", "bc":
-		backend = bytecode.NewBytecodeBackend()
-
 	case "assembly", "asm", "native":
 		var err error
 		backend, err = assembly.NewAssemblyBackend(arch)
@@ -82,7 +78,6 @@ func (c *Compiler) executarBackend(statements []parser.Expressao, backendType st
 
 Backends disponíveis:
   interpreter, interp, ast  - Interpretação direta da AST (padrão)
-  bytecode, vm, bc         - Compilação para Bytecode + VM
   assembly, asm, native    - Compilação para Assembly x86-64
   llvm, llvmir, ir         - Compilação para LLVM IR
   `, backendType)

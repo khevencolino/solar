@@ -14,7 +14,6 @@ help:
 	@echo ""
 	@echo "make build                         - Construir compilador"
 	@echo "make run FILE=<arquivo>             - Executar (interpretador)"
-	@echo "make run FILE=<arquivo> BACKEND=bytecode"
 	@echo "make run FILE=<arquivo> BACKEND=assembly"
 	@echo "make fmt                            - Formatar código"
 	@echo "make lint                           - Verificar código"
@@ -23,7 +22,7 @@ help:
 	@echo ""
 	@echo "Exemplos:"
 	@echo "  make run FILE=exemplos/operacao/valido.solar"
-	@echo "  make run FILE=exemplos/funcoes_builtin/teste_simples.solar BACKEND=bytecode"
+	@echo "  make run FILE=exemplos/funcoes_builtin/teste_simples.solar BACKEND=llvm"
 
 # Construir
 build:

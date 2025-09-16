@@ -1,13 +1,13 @@
 // Teste básico do comando "se"
-x ~> 10
-y ~> 5
+x ~> 10;
+y ~> 5;
 
 se x > y {
-    imprime(x)
+    imprime(x);
 }
 
 se x < y {
-    imprime(y)
+    imprime(y);
 } senao {
-    imprime(x - y)
+    imprime(x - y);
 }

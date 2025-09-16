@@ -42,6 +42,7 @@ func (l *Lexer) inicializarPadroes() {
 		ASSIGN:        regexp.MustCompile(`^~>`),                   // Simbolo para alocar variavel ~>
 		IDENTIFIER:    regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*`), // Palavras permitidas para nomear variaveis
 		COMMA:         regexp.MustCompile(`^,`),                    // Vírgula: ,
+		SEMICOLON:     regexp.MustCompile(`^;`),                    // Ponto e vírgula: ;
 		WHITESPACE:    regexp.MustCompile(`^\s+`),                  // Espaços em branco
 		COMMENT:       regexp.MustCompile(`^//.*`),                 // Comentarios //
 		LBRACE:        regexp.MustCompile(`^\{`),                   // Chave esquerda: {
@@ -88,7 +89,7 @@ func (l *Lexer) proximoToken() (Token, error) {
 	restante := l.entrada[l.posicao:]
 
 	// Tenta fazer match com cada padrão (ordem importa para ** vs *, >= vs >, <= vs <, == vs =, != vs !)
-	tiposToken := []TokenType{COMMENT, ASSIGN, IDENTIFIER, POWER, GREATER_EQUAL, LESS_EQUAL, NOT_EQUAL, EQUAL, NUMBER, PLUS, MINUS, DIVIDE, MULTIPLY, LPAREN, RPAREN, LBRACE, RBRACE, LESS, GREATER, COMMA, WHITESPACE}
+	tiposToken := []TokenType{COMMENT, ASSIGN, IDENTIFIER, POWER, GREATER_EQUAL, LESS_EQUAL, NOT_EQUAL, EQUAL, NUMBER, PLUS, MINUS, DIVIDE, MULTIPLY, LPAREN, RPAREN, LBRACE, RBRACE, LESS, GREATER, COMMA, SEMICOLON, WHITESPACE}
 
 	for _, tipoToken := range tiposToken {
 		if match := l.padroes[tipoToken].FindString(restante); match != "" {

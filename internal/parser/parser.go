@@ -64,6 +64,13 @@ func (p *Parser) AnalisarPrograma() ([]Expressao, error) {
 			return nil, err
 		}
 		statements = append(statements, statement)
+
+		// Estruturas de controle (como 'se') não precisam de semicolon
+		if _, ehComandoSe := statement.(*ComandoSe); !ehComandoSe {
+			if err := p.esperarSemicolon(); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	if len(statements) == 0 {
@@ -117,7 +124,7 @@ func (p *Parser) analisarExpressao(precedenciaMinima Precedencia) (Expressao, er
 		tokenAtual := p.tokenAtual()
 
 		// Se chegou ao fim ou não é um operador binário, para
-		if tokenAtual.Type == lexer.EOF || tokenAtual.Type == lexer.RPAREN || tokenAtual.Type == lexer.LBRACE {
+		if tokenAtual.Type == lexer.EOF || tokenAtual.Type == lexer.RPAREN || tokenAtual.Type == lexer.LBRACE || tokenAtual.Type == lexer.SEMICOLON {
 			break
 		}
 
@@ -320,6 +327,16 @@ func (p *Parser) chegouAoFim() bool {
 		(p.posicaoAtual < len(p.tokens) && p.tokens[p.posicaoAtual].Type == lexer.EOF)
 }
 
+// esperarSemicolon verifica se o próximo token é um semicolon e o consome
+func (p *Parser) esperarSemicolon() error {
+	if p.tokenAtual().Type != lexer.SEMICOLON {
+		token := p.tokenAtual()
+		return fmt.Errorf("esperado ';' em %s, encontrado '%s'", token.Position, token.Value)
+	}
+	p.proximoToken() // consome o semicolon
+	return nil
+}
+
 // analisarComandoSe analisa um comando if/else
 func (p *Parser) analisarComandoSe() (Expressao, error) {
 	tokenSe := p.proximoToken() // consome "se"
@@ -377,6 +394,13 @@ func (p *Parser) analisarBloco() (*Bloco, error) {
 			return nil, err
 		}
 		comandos = append(comandos, comando)
+
+		// Estruturas de controle (como 'se') não precisam de semicolon
+		if _, ehComandoSe := comando.(*ComandoSe); !ehComandoSe {
+			if err := p.esperarSemicolon(); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// Espera '}'

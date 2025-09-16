@@ -30,7 +30,7 @@ func main() {
 
 func processarArgumentos() (string, string, string, bool, bool, error) {
 	// Define flags
-	backend := flag.String("backend", "interpreter", "Backend a ser usado (interpreter, bytecode, assembly, llvm)")
+	backend := flag.String("backend", "interpreter", "Backend a ser usado (interpreter, assembly, llvm)")
 	arch := flag.String("arch", "x86_64", "Arquitetura para assembly (x86_64)")
 	debug := flag.Bool("debug", false, "Ativar mensagens de debug")
 	help := flag.Bool("help", false, "Mostra ajuda")
@@ -68,21 +68,16 @@ FLAGS:
 
 BACKENDS DISPONÍVEIS:
 
-🔍 interpreter, interp, ast
+interpreter, interp, ast
     - Interpretação direta da AST
     - Mostra árvore sintática
 
-🤖 bytecode, vm, bc
-    - Compilação para bytecode + Virtual Machine
-    - Mostra instruções geradas
-    - Boa performance, fácil debug
-
-🔧 assembly, asm, native
+assembly, asm, native
     - Compilação para Assembly nativo
     - Gera executável standalone*
     - Máxima performance
 
-⚡ llvm, llvmir, ir
+llvm, llvmir, ir
     - Compilação para LLVM IR
     - Pode ser compilado para executável com clang/llc
     - Otimizações LLVM disponíveis
@@ -93,7 +88,6 @@ ARQUITETURAS SUPORTADAS PARA ASSEMBLY:
 EXEMPLOS:
     solar-compiler programa.solar                            # Usa interpretador (padrão)
     solar-compiler -backend=interpreter programa.solar       # Interpretação direta
-    solar-compiler -backend=bytecode programa.solar          # Bytecode + VM
     solar-compiler -backend=assembly programa.solar          # Assembly x86_64
     solar-compiler -backend=llvm programa.solar              # LLVM IR
     solar-compiler -debug programa.solar                     # Com mensagens de debug

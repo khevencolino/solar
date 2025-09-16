@@ -1,0 +1,13 @@
+// Teste da função builtin imprime()
+imprime(42);
+imprime(2 + 3);
+imprime(10, 20, 30);
+
+// Usando com variáveis
+x ~> 15;
+y ~> x * 2;
+imprime(x, y);
+
+// Expressões mais complexas
+imprime(2 ** 3 + 1);
+imprime((5 + 3) * 2);
