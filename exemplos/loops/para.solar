@@ -1,0 +1,4 @@
+// exemplo de para (for estilo C)
+para (i: inteiro ~> 0; i < 5; i ~> i + 1) {
+  imprime(i);
+}

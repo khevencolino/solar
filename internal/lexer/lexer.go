@@ -43,6 +43,7 @@ func (l *Lexer) inicializarPadroes() {
 		IDENTIFIER:    regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*`), // Palavras permitidas para nomear variaveis
 		COMMA:         regexp.MustCompile(`^,`),                    // Vírgula: ,
 		SEMICOLON:     regexp.MustCompile(`^;`),                    // Ponto e vírgula: ;
+		COLON:         regexp.MustCompile(`^:`),                    // Dois pontos: :
 		WHITESPACE:    regexp.MustCompile(`^\s+`),                  // Espaços em branco
 		COMMENT:       regexp.MustCompile(`^//.*`),                 // Comentarios //
 		LBRACE:        regexp.MustCompile(`^\{`),                   // Chave esquerda: {
@@ -89,7 +90,7 @@ func (l *Lexer) proximoToken() (Token, error) {
 	restante := l.entrada[l.posicao:]
 
 	// Tenta fazer match com cada padrão (ordem importa para ** vs *, >= vs >, <= vs <, == vs =, != vs !)
-	tiposToken := []TokenType{COMMENT, ASSIGN, IDENTIFIER, POWER, GREATER_EQUAL, LESS_EQUAL, NOT_EQUAL, EQUAL, NUMBER, PLUS, MINUS, DIVIDE, MULTIPLY, LPAREN, RPAREN, LBRACE, RBRACE, LESS, GREATER, COMMA, SEMICOLON, WHITESPACE}
+	tiposToken := []TokenType{COMMENT, ASSIGN, IDENTIFIER, POWER, GREATER_EQUAL, LESS_EQUAL, NOT_EQUAL, EQUAL, NUMBER, PLUS, MINUS, DIVIDE, MULTIPLY, LPAREN, RPAREN, LBRACE, RBRACE, LESS, GREATER, COMMA, SEMICOLON, COLON, WHITESPACE}
 
 	for _, tipoToken := range tiposToken {
 		if match := l.padroes[tipoToken].FindString(restante); match != "" {
@@ -124,8 +125,14 @@ func (l *Lexer) ehFuncaoBuiltin(nome string) bool {
 // ehPalavraChave verifica se um identificador é uma palavra-chave
 func (l *Lexer) ehPalavraChave(nome string) bool {
 	palavrasChave := map[string]bool{
-		"se":    true,
-		"senao": true,
+		"se":         true,
+		"senao":      true,
+		"definir":    true,
+		"retornar":   true,
+		"verdadeiro": true,
+		"falso":      true,
+		"para":       true,
+		"enquanto":   true,
 	}
 	return palavrasChave[nome]
 }
@@ -137,6 +144,18 @@ func (l *Lexer) obterTipoPalavraChave(nome string) TokenType {
 		return SE
 	case "senao":
 		return SENAO
+	case "definir":
+		return DEFINIR
+	case "retornar":
+		return RETORNAR
+	case "para":
+		return PARA
+	case "enquanto":
+		return ENQUANTO
+	case "verdadeiro":
+		return VERDADEIRO
+	case "falso":
+		return FALSO
 	default:
 		return IDENTIFIER
 	}

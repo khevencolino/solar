@@ -19,12 +19,16 @@ type LLVMBackend struct {
 	block     *ir.Block
 	function  *ir.Func
 	variables map[string]value.Value
+	varStack  []map[string]value.Value
+	userFuncs map[string]*ir.Func
 	tmpCount  int
 }
 
 func NewLLVMBackend() *LLVMBackend {
 	return &LLVMBackend{
 		variables: make(map[string]value.Value),
+		varStack:  nil,
+		userFuncs: make(map[string]*ir.Func),
 		tmpCount:  0,
 	}
 }
@@ -41,6 +45,13 @@ func (l *LLVMBackend) Compile(statements []parser.Expressao) error {
 	// Declara função printf para impressão
 	printf := l.module.NewFunc("printf", types.I32, ir.NewParam("format", types.NewPointer(types.I8)))
 	printf.Sig.Variadic = true
+
+	// Primeira passada: declarar protótipos de funções do usuário
+	for _, st := range statements {
+		if fn, ok := st.(*parser.FuncaoDeclaracao); ok {
+			l.declararFuncaoUsuario(fn)
+		}
+	}
 
 	// Declara função main
 	l.function = l.module.NewFunc("main", types.I32)
@@ -78,9 +89,14 @@ func (l *LLVMBackend) processarExpressao(expr parser.Expressao) value.Value {
 	switch e := expr.(type) {
 	case *parser.Constante:
 		return constant.NewInt(types.I64, int64(e.Valor))
+	case *parser.Booleano:
+		if e.Valor {
+			return constant.NewInt(types.I64, 1)
+		}
+		return constant.NewInt(types.I64, 0)
 
 	case *parser.Variavel:
-		if val, exists := l.variables[e.Nome]; exists {
+		if val, ok := l.getVar(e.Nome); ok {
 			return val
 		}
 		fmt.Printf("Variável '%s' não definida\n", e.Nome)
@@ -91,7 +107,7 @@ func (l *LLVMBackend) processarExpressao(expr parser.Expressao) value.Value {
 
 	case *parser.Atribuicao:
 		valor := l.processarExpressao(e.Valor)
-		l.variables[e.Nome] = valor
+		l.setVar(e.Nome, valor)
 		return valor
 
 	case *parser.ChamadaFuncao:
@@ -99,9 +115,30 @@ func (l *LLVMBackend) processarExpressao(expr parser.Expressao) value.Value {
 
 	case *parser.ComandoSe:
 		return l.processarComandoSe(e)
+	case *parser.ComandoEnquanto:
+		return l.processarEnquanto(e)
+	case *parser.ComandoPara:
+		return l.processarPara(e)
 
 	case *parser.Bloco:
 		return l.processarBloco(e)
+
+	case *parser.FuncaoDeclaracao:
+		l.definirFuncaoUsuario(e)
+		return constant.NewInt(types.I64, 0)
+
+	case *parser.Retorno:
+		if e.Valor != nil {
+			v := l.processarExpressao(e.Valor)
+			if l.function != nil {
+				l.block.NewRet(v)
+			}
+			return v
+		}
+		if l.function != nil {
+			l.block.NewRet(constant.NewInt(types.I64, 0))
+		}
+		return constant.NewInt(types.I64, 0)
 
 	default:
 		fmt.Printf("Tipo de expressão não suportado: %T\n", expr)
@@ -134,17 +171,15 @@ func (l *LLVMBackend) processarOperacao(op *parser.OperacaoBinaria) value.Value 
 		return l.block.NewSDiv(esquerda, direita)
 
 	case parser.POWER:
-		// Para potenciação, usamos uma chamada para pow (que seria declarada externamente)
 		pow := l.module.NewFunc("pow", types.Double,
 			ir.NewParam("base", types.Double),
 			ir.NewParam("exp", types.Double))
 
-		// Converte para double
 		esquerdaDouble := l.block.NewSIToFP(esquerda, types.Double)
 		direitaDouble := l.block.NewSIToFP(direita, types.Double)
 
 		powResult := l.block.NewCall(pow, esquerdaDouble, direitaDouble)
-		// Converte de volta para inteiro
+
 		return l.block.NewFPToSI(powResult, types.I64)
 
 	// Operações de comparação
@@ -179,6 +214,16 @@ func (l *LLVMBackend) processarOperacao(op *parser.OperacaoBinaria) value.Value 
 }
 
 func (l *LLVMBackend) processarFuncao(fn *parser.ChamadaFuncao) value.Value {
+	// Chamada de função de usuário
+	if uf, ok := l.userFuncs[fn.Nome]; ok {
+		// Avalia argumentos
+		var args []value.Value
+		for _, a := range fn.Argumentos {
+			args = append(args, l.processarExpressao(a))
+		}
+		call := l.block.NewCall(uf, args...)
+		return call
+	}
 	switch fn.Nome {
 	case "imprime":
 		if len(fn.Argumentos) > 0 {
@@ -308,14 +353,173 @@ func (l *LLVMBackend) processarComandoSe(comando *parser.ComandoSe) value.Value 
 
 // processarBloco processa um bloco de comandos
 func (l *LLVMBackend) processarBloco(bloco *parser.Bloco) value.Value {
+	// Novo escopo de variáveis
+	l.pushScope()
 	var ultimoValor value.Value = constant.NewInt(types.I64, 0)
 
 	for _, comando := range bloco.Comandos {
 		val := l.processarExpressao(comando)
+		// Se encontrou retorno, encerra bloco cedo
+		if term := l.block.Term; term != nil {
+			l.popScope()
+			return val
+		}
 		if val != nil {
 			ultimoValor = val
 		}
 	}
 
+	l.popScope()
 	return ultimoValor
+}
+
+func (l *LLVMBackend) processarEnquanto(cmd *parser.ComandoEnquanto) value.Value {
+	funcBlock := l.function
+	// Cria blocos
+	condBlock := funcBlock.NewBlock("while.cond")
+	bodyBlock := funcBlock.NewBlock("while.body")
+	endBlock := funcBlock.NewBlock("while.end")
+
+	// Branch para condição
+	l.block.NewBr(condBlock)
+	l.block = condBlock
+	condVal := l.processarExpressao(cmd.Condicao)
+	zero := constant.NewInt(types.I64, 0)
+	condI1 := l.block.NewICmp(enum.IPredNE, condVal, zero)
+	l.block.NewCondBr(condI1, bodyBlock, endBlock)
+
+	// Corpo
+	l.block = bodyBlock
+	last := l.processarBloco(cmd.Corpo)
+	// Se corpo não retornou, volta para cond
+	if l.block.Term == nil {
+		l.block.NewBr(condBlock)
+	}
+
+	l.block = endBlock
+	return last
+}
+
+func (l *LLVMBackend) processarPara(cmd *parser.ComandoPara) value.Value {
+	funcBlock := l.function
+	// init
+	if cmd.Inicializacao != nil {
+		l.processarExpressao(cmd.Inicializacao)
+	}
+	// Blocos
+	condBlock := funcBlock.NewBlock("for.cond")
+	bodyBlock := funcBlock.NewBlock("for.body")
+	stepBlock := funcBlock.NewBlock("for.step")
+	endBlock := funcBlock.NewBlock("for.end")
+
+	l.block.NewBr(condBlock)
+	l.block = condBlock
+	// condição (vazia => true)
+	var condI1 value.Value
+	if cmd.Condicao != nil {
+		condVal := l.processarExpressao(cmd.Condicao)
+		zero := constant.NewInt(types.I64, 0)
+		condI1 = l.block.NewICmp(enum.IPredNE, condVal, zero)
+	} else {
+		condI1 = constant.NewInt(types.I1, 1)
+	}
+	l.block.NewCondBr(condI1, bodyBlock, endBlock)
+
+	// body
+	l.block = bodyBlock
+	last := l.processarBloco(cmd.Corpo)
+	if l.block.Term == nil {
+		l.block.NewBr(stepBlock)
+	}
+
+	// step
+	l.block = stepBlock
+	if cmd.PosIteracao != nil {
+		l.processarExpressao(cmd.PosIteracao)
+	}
+	if l.block.Term == nil {
+		l.block.NewBr(condBlock)
+	}
+
+	l.block = endBlock
+	return last
+}
+
+// Suporte a funções do usuário
+func (l *LLVMBackend) declararFuncaoUsuario(fn *parser.FuncaoDeclaracao) {
+	// Assinaturas somente de inteiros i64
+	// TODO: tipos variados
+	params := make([]*ir.Param, len(fn.Parametros))
+	for i, p := range fn.Parametros {
+		params[i] = ir.NewParam(p, types.I64)
+	}
+	f := l.module.NewFunc(fn.Nome, types.I64, params...)
+	l.userFuncs[fn.Nome] = f
+}
+
+func (l *LLVMBackend) definirFuncaoUsuario(fn *parser.FuncaoDeclaracao) {
+	f, ok := l.userFuncs[fn.Nome]
+	if !ok {
+		l.declararFuncaoUsuario(fn)
+		f = l.userFuncs[fn.Nome]
+	}
+	// Cria bloco de entrada
+	prevFunc := l.function
+	prevBlock := l.block
+	l.function = f
+	entry := f.NewBlock("entry")
+	l.block = entry
+
+	// Novo escopo e bind de parâmetros
+	l.pushScope()
+	for _, p := range f.Params {
+		l.variables[p.Name()] = p
+	}
+
+	// Processa corpo: retorno implícito = última expressão
+	result := l.processarBloco(fn.Corpo)
+	if l.block.Term == nil {
+		l.block.NewRet(result)
+	}
+	l.popScope()
+
+	// Restaura função/bloco anterior
+	l.function = prevFunc
+	l.block = prevBlock
+}
+
+// Escopos de variáveis
+func (l *LLVMBackend) pushScope() {
+	// Copia raso para permitir shadowing isolado
+	// TODO: otimizar com linked list?
+	novo := make(map[string]value.Value)
+	l.varStack = append(l.varStack, l.variables)
+	l.variables = novo
+}
+
+func (l *LLVMBackend) popScope() {
+	if len(l.varStack) == 0 {
+		return
+	}
+	topo := l.varStack[len(l.varStack)-1]
+	l.varStack = l.varStack[:len(l.varStack)-1]
+	l.variables = topo
+}
+
+// Variável: set no escopo atual
+func (l *LLVMBackend) setVar(name string, val value.Value) {
+	l.variables[name] = val
+}
+
+// Variável: busca do escopo atual para os anteriores
+func (l *LLVMBackend) getVar(name string) (value.Value, bool) {
+	if v, ok := l.variables[name]; ok {
+		return v, true
+	}
+	for i := len(l.varStack) - 1; i >= 0; i-- {
+		if v, ok := l.varStack[i][name]; ok {
+			return v, true
+		}
+	}
+	return nil, false
 }

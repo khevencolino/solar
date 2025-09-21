@@ -5,8 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"runtime"
+	"strings"
 
 	"github.com/khevencolino/Solar/internal/debug"
 	"github.com/khevencolino/Solar/internal/parser"
@@ -18,11 +18,13 @@ type X86_64Backend struct {
 	output     strings.Builder
 	variables  map[string]bool
 	labelCount int
+	functions  map[string]*parser.FuncaoDeclaracao
 }
 
 func NewX86_64Backend() *X86_64Backend {
 	return &X86_64Backend{
 		variables: make(map[string]bool),
+		functions: make(map[string]*parser.FuncaoDeclaracao),
 	}
 }
 
@@ -32,7 +34,19 @@ func (a *X86_64Backend) GetExtension() string { return ".s" }
 func (a *X86_64Backend) Compile(statements []parser.Expressao) error {
 	debug.Printf("Compilando para Assembly x86-64...\n")
 
+	// Primeira passada: coletar funções
+	for _, s := range statements {
+		if fn, ok := s.(*parser.FuncaoDeclaracao); ok {
+			a.functions[fn.Nome] = fn
+		}
+	}
+
 	a.gerarPrologo()
+
+	// Emite corpos de funções antes do _start
+	for nome, fn := range a.functions {
+		a.gerarFuncaoUsuario(nome, fn)
+	}
 
 	// Processa statements
 	for i, stmt := range statements {
@@ -76,6 +90,15 @@ func (a *X86_64Backend) checarExpressao(expr parser.Expressao) {
 // Implementação da interface visitor
 func (a *X86_64Backend) Constante(constante *parser.Constante) interface{} {
 	a.output.WriteString(fmt.Sprintf("    mov $%d, %%rax\n", constante.Valor))
+	return nil
+}
+
+func (a *X86_64Backend) Booleano(b *parser.Booleano) interface{} {
+	if b.Valor {
+		a.output.WriteString("    mov $1, %rax\n")
+	} else {
+		a.output.WriteString("    mov $0, %rax\n")
+	}
 	return nil
 }
 
@@ -160,6 +183,18 @@ func (a *X86_64Backend) OperacaoBinaria(operacao *parser.OperacaoBinaria) interf
 }
 
 func (a *X86_64Backend) ChamadaFuncao(chamada *parser.ChamadaFuncao) interface{} {
+	// Função de usuário: chamada direta por label
+	if _, ok := a.functions[chamada.Nome]; ok {
+		// Avalia argumentos e coloca nos registradores na ordem: rdi, rsi, rdx, rcx, r8, r9
+		regs := []string{"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"}
+		n := len(chamada.Argumentos)
+		for idx := 0; idx < n && idx < len(regs); idx++ {
+			chamada.Argumentos[idx].Aceitar(a)
+			a.output.WriteString(fmt.Sprintf("    mov %%rax, %s\n", regs[idx]))
+		}
+		a.output.WriteString(fmt.Sprintf("    call func_%s\n", chamada.Nome))
+		return nil
+	}
 	// Valida a função usando o registro
 	assinatura, ok := registry.RegistroGlobal.ObterAssinatura(chamada.Nome)
 	if !ok {
@@ -315,6 +350,89 @@ func (a *X86_64Backend) Bloco(bloco *parser.Bloco) interface{} {
 	}
 	return nil
 }
+
+func (a *X86_64Backend) ComandoEnquanto(cmd *parser.ComandoEnquanto) interface{} {
+	// Labels únicos
+	id := a.labelCount
+	a.labelCount++
+	lcond := fmt.Sprintf(".while_cond_%d", id)
+	lbody := fmt.Sprintf(".while_body_%d", id)
+	lend := fmt.Sprintf(".while_end_%d", id)
+
+	// Jump para condição
+	a.output.WriteString(fmt.Sprintf("    jmp %s\n", lcond))
+	a.output.WriteString(fmt.Sprintf("%s:\n", lbody))
+	// Corpo
+	cmd.Corpo.Aceitar(a)
+	// Volta para condição
+	a.output.WriteString(fmt.Sprintf("    jmp %s\n", lcond))
+	// Condição
+	a.output.WriteString(fmt.Sprintf("%s:\n", lcond))
+	cmd.Condicao.Aceitar(a)
+	a.output.WriteString("    test %rax, %rax\n")
+	a.output.WriteString(fmt.Sprintf("    jnz %s\n", lbody))
+	a.output.WriteString(fmt.Sprintf("%s:\n", lend))
+	return nil
+}
+
+func (a *X86_64Backend) ComandoPara(cmd *parser.ComandoPara) interface{} {
+	id := a.labelCount
+	a.labelCount++
+	lcond := fmt.Sprintf(".for_cond_%d", id)
+	lbody := fmt.Sprintf(".for_body_%d", id)
+	lstep := fmt.Sprintf(".for_step_%d", id)
+	lend := fmt.Sprintf(".for_end_%d", id)
+
+	// init
+	if cmd.Inicializacao != nil {
+		cmd.Inicializacao.Aceitar(a)
+	}
+
+	// Condição
+	a.output.WriteString(fmt.Sprintf("%s:\n", lcond))
+	if cmd.Condicao != nil {
+		cmd.Condicao.Aceitar(a)
+		a.output.WriteString("    test %rax, %rax\n")
+		a.output.WriteString(fmt.Sprintf("    jz %s\n", lend))
+	}
+
+	// Corpo
+	a.output.WriteString(fmt.Sprintf("%s:\n", lbody))
+	cmd.Corpo.Aceitar(a)
+	a.output.WriteString(fmt.Sprintf("    jmp %s\n", lstep))
+
+	// Passo
+	a.output.WriteString(fmt.Sprintf("%s:\n", lstep))
+	if cmd.PosIteracao != nil {
+		cmd.PosIteracao.Aceitar(a)
+	}
+	a.output.WriteString(fmt.Sprintf("    jmp %s\n", lcond))
+
+	a.output.WriteString(fmt.Sprintf("%s:\n", lend))
+	return nil
+}
+
+// Declaração/definição de função do usuário (básica)
+func (a *X86_64Backend) gerarFuncaoUsuario(nome string, fn *parser.FuncaoDeclaracao) {
+	// Convenção System V: parâmetros em rdi, rsi, rdx, rcx, r8, r9; retorno em rax
+	a.output.WriteString(fmt.Sprintf("func_%s:\n", nome))
+	// Mapear parâmetros para variáveis (como globais simples com mov)
+	regs := []string{"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"}
+	for idx, p := range fn.Parametros {
+		if idx >= len(regs) {
+			break // mais de 6 parâmetros não são suportados
+		}
+		a.declararVariavel(p)
+		a.output.WriteString(fmt.Sprintf("    mov %s, %s(%%rip)\n", regs[idx], a.getVarName(p)))
+	}
+	// Gerar corpo (usando as variáveis globais dos params)
+	fn.Corpo.Aceitar(a)
+	// Resultado esperado em %rax (pela última expressão)
+	a.output.WriteString("    ret\n\n")
+}
+
+func (a *X86_64Backend) FuncaoDeclaracao(fn *parser.FuncaoDeclaracao) interface{} { return nil }
+func (a *X86_64Backend) Retorno(ret *parser.Retorno) interface{}                  { return nil }
 
 func (a *X86_64Backend) declararVariavel(nome string) {
 	a.variables[nome] = true

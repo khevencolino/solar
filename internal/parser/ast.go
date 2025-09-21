@@ -9,12 +9,17 @@ import (
 // Node define a interface
 type Node interface {
 	Constante(constante *Constante) interface{}
+	Booleano(boolLit *Booleano) interface{}
 	OperacaoBinaria(operacao *OperacaoBinaria) interface{}
 	Variavel(variavel *Variavel) interface{}
 	Atribuicao(atribuicao *Atribuicao) interface{}
 	ChamadaFuncao(chamada *ChamadaFuncao) interface{}
 	ComandoSe(comando *ComandoSe) interface{}
+	ComandoEnquanto(cmd *ComandoEnquanto) interface{}
+	ComandoPara(cmd *ComandoPara) interface{}
 	Bloco(bloco *Bloco) interface{}
+	FuncaoDeclaracao(fn *FuncaoDeclaracao) interface{}
+	Retorno(ret *Retorno) interface{}
 }
 
 // Expressao representa a interface base para todos os nós da AST
@@ -37,6 +42,20 @@ func (c *Constante) Aceitar(node Node) interface{} {
 // String retorna representação em string da constante
 func (c *Constante) String() string {
 	return fmt.Sprintf("%d", c.Valor)
+}
+
+// Booleano representa um literal booleano na árvore
+type Booleano struct {
+	Valor bool
+	Token lexer.Token
+}
+
+func (b *Booleano) Aceitar(node Node) interface{} { return node.Booleano(b) }
+func (b *Booleano) String() string {
+	if b.Valor {
+		return "verdadeiro"
+	}
+	return "falso"
 }
 
 // OperacaoBinaria representa uma operação binária na árvore
@@ -124,9 +143,10 @@ func (v *Variavel) String() string {
 
 // Atribuicao representa uma atribuicao na árvore
 type Atribuicao struct {
-	Nome  string
-	Valor Expressao
-	Token lexer.Token
+	Nome        string
+	Valor       Expressao
+	Token       lexer.Token
+	TipoAnotado *Tipo
 }
 
 func (a *Atribuicao) Aceitar(node Node) interface{} {
@@ -198,4 +218,96 @@ func (b *Bloco) String() string {
 		comandosStr += comando.String()
 	}
 	return fmt.Sprintf("{ %s }", comandosStr)
+}
+
+// Enquanto (while)
+type ComandoEnquanto struct {
+	Condicao Expressao
+	Corpo    *Bloco
+	Token    lexer.Token
+}
+
+func (e *ComandoEnquanto) Aceitar(node Node) interface{} { return node.ComandoEnquanto(e) }
+func (e *ComandoEnquanto) String() string {
+	return fmt.Sprintf("enquanto (%s) %s", e.Condicao.String(), e.Corpo.String())
+}
+
+// Para (for) com estilo C: init; cond; pos
+type ComandoPara struct {
+	Inicializacao Expressao // pode ser nil
+	Condicao      Expressao // pode ser nil (trata como verdadeiro)
+	PosIteracao   Expressao // pode ser nil
+	Corpo         *Bloco
+	Token         lexer.Token
+}
+
+func (p *ComandoPara) Aceitar(node Node) interface{} { return node.ComandoPara(p) }
+func (p *ComandoPara) String() string {
+	return fmt.Sprintf("para (%s; %s; %s) %s", strOr(p.Inicializacao), strOr(p.Condicao), strOr(p.PosIteracao), p.Corpo.String())
+}
+
+func strOr(e Expressao) string {
+	if e == nil {
+		return ""
+	}
+	return e.String()
+}
+
+// Tipagem simples
+type Tipo int
+
+const (
+	TipoVazio    Tipo = iota // semelhante a void/null
+	TipoInteiro              // inteiros (i64)
+	TipoDecimal              // ponto flutuante (double)
+	TipoTexto                // strings
+	TipoBooleano             // booleano
+)
+
+func (t Tipo) String() string {
+	switch t {
+	case TipoVazio:
+		return "vazio"
+	case TipoInteiro:
+		return "inteiro"
+	case TipoDecimal:
+		return "decimal"
+	case TipoTexto:
+		return "texto"
+	case TipoBooleano:
+		return "booleano"
+	default:
+		return "?"
+	}
+}
+
+// FuncaoDeclaracao representa a declaração de uma função do usuário
+type FuncaoDeclaracao struct {
+	Nome       string
+	Parametros []string
+	ParamTipos []Tipo // paralelo a Parametros (se vazio, assume Int)
+	Retorno    Tipo   // default Int
+	Corpo      *Bloco
+	Token      lexer.Token
+}
+
+func (f *FuncaoDeclaracao) Aceitar(node Node) any { return node.FuncaoDeclaracao(f) }
+
+func (f *FuncaoDeclaracao) String() string {
+	return fmt.Sprintf("definir %s(%v) %s", f.Nome, f.Parametros, f.Corpo.String())
+}
+
+// Retorno representa um comando de retorno na árvore
+type Retorno struct {
+	Valor Expressao // pode ser nil para retorno vazio
+	Token lexer.Token
+}
+
+func (r *Retorno) Aceitar(node Node) any { return node.Retorno(r) }
+
+func (r *Retorno) String() string {
+	if r.Valor == nil {
+		return "retornar"
+	}
+	return fmt.Sprintf("retornar %s", r.Valor.String())
 }

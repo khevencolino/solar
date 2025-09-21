@@ -65,11 +65,21 @@ func (p *Parser) AnalisarPrograma() ([]Expressao, error) {
 		}
 		statements = append(statements, statement)
 
-		// Estruturas de controle (como 'se') não precisam de semicolon
-		if _, ehComandoSe := statement.(*ComandoSe); !ehComandoSe {
-			if err := p.esperarSemicolon(); err != nil {
-				return nil, err
-			}
+		// Estruturas de controle (se, enquanto, para) e declarações de função não precisam de semicolon
+		if _, ok := statement.(*ComandoSe); ok {
+			continue
+		}
+		if _, ok := statement.(*ComandoEnquanto); ok {
+			continue
+		}
+		if _, ok := statement.(*ComandoPara); ok {
+			continue
+		}
+		if _, ehFuncDecl := statement.(*FuncaoDeclaracao); ehFuncDecl {
+			continue
+		}
+		if err := p.esperarSemicolon(); err != nil {
+			return nil, err
 		}
 	}
 
@@ -89,9 +99,44 @@ func (p *Parser) analisarStatement() (Expressao, error) {
 		return p.analisarComandoSe()
 	}
 
-	// Verifica se é uma atribuição
+	// enquanto (cond) { bloco }
+	if token.Type == lexer.ENQUANTO {
+		return p.analisarComandoEnquanto()
+	}
+
+	// para (init; cond; pos) { bloco }
+	if token.Type == lexer.PARA {
+		return p.analisarComandoPara()
+	}
+
+	// Verifica se é uma declaração de função: definir nome(params) { bloco }
+	if token.Type == lexer.DEFINIR {
+		return p.analisarDeclaracaoFuncao()
+	}
+
+	// Verifica se é um retorno
+	if token.Type == lexer.RETORNAR {
+		return p.analisarRetorno()
+	}
+
+	// Verifica se é uma atribuição (com ou sem anotação de tipo)
 	if token.Type == lexer.IDENTIFIER {
 		p.proximoToken() // consome o identificador
+
+		// Suporta anotação de tipo: IDENT ':' tipo '~>' expr
+		var tipoAnnot *Tipo
+		if p.tokenAtual().Type == lexer.COLON {
+			p.proximoToken()
+			tTok := p.proximoToken()
+			if tTok.Type != lexer.IDENTIFIER {
+				return nil, utils.NovoErro("tipo inválido", tTok.Position.Line, tTok.Position.Column, "esperado identificador de tipo")
+			}
+			tp, err := p.parseTipoPorNome(tTok.Value)
+			if err != nil {
+				return nil, utils.NovoErro("tipo inválido", tTok.Position.Line, tTok.Position.Column, err.Error())
+			}
+			tipoAnnot = &tp
+		}
 
 		if p.tokenAtual().Type == lexer.ASSIGN {
 			p.proximoToken() // consome o operador de atribuição
@@ -99,9 +144,11 @@ func (p *Parser) analisarStatement() (Expressao, error) {
 			if err != nil {
 				return nil, err
 			}
-			return &Atribuicao{Nome: token.Value, Valor: valor, Token: token}, nil
+			return &Atribuicao{Nome: token.Value, Valor: valor, Token: token, TipoAnotado: tipoAnnot}, nil
+		} else if p.tokenAtual().Type == lexer.LPAREN {
+			return p.analisarChamadaFuncao(lexer.NovoToken(lexer.FUNCTION, token.Value, token.Position))
 		} else {
-			// Se não é atribuição, volta um token e analisa como expressão
+			// Se não é atribuição nem chamada, volta um token e analisa como expressão
 			p.posicaoAtual--
 			return p.analisarExpressao(PRECEDENCIA_NENHUMA)
 		}
@@ -109,6 +156,21 @@ func (p *Parser) analisarStatement() (Expressao, error) {
 
 	// Caso contrário, analisa como expressão
 	return p.analisarExpressao(PRECEDENCIA_NENHUMA)
+}
+
+// analisarRetorno: 'retornar' expressao? ';'
+func (p *Parser) analisarRetorno() (Expressao, error) {
+	tok := p.proximoToken() // consome 'retornar'
+	var expr Expressao
+	// retorno pode ser vazio: se próximo é ';' ou '}'
+	if t := p.tokenAtual(); t.Type != lexer.SEMICOLON && t.Type != lexer.RBRACE {
+		e, err := p.analisarExpressao(PRECEDENCIA_NENHUMA)
+		if err != nil {
+			return nil, err
+		}
+		expr = e
+	}
+	return &Retorno{Valor: expr, Token: tok}, nil
 }
 
 // analisarExpressao implementa precedência de operadores usando o algoritmo Pratt
@@ -183,7 +245,16 @@ func (p *Parser) analisarPrefixo() (Expressao, error) {
 		}
 		return &Constante{Valor: valor, Token: token}, nil
 
+	case lexer.VERDADEIRO:
+		return &Booleano{Valor: true, Token: token}, nil
+	case lexer.FALSO:
+		return &Booleano{Valor: false, Token: token}, nil
+
 	case lexer.IDENTIFIER:
+		// Pode ser variável ou início de chamada de função do usuário
+		if p.tokenAtual().Type == lexer.LPAREN {
+			return p.analisarChamadaFuncao(lexer.NovoToken(lexer.FUNCTION, token.Value, token.Position))
+		}
 		return &Variavel{Nome: token.Value, Token: token}, nil
 
 	case lexer.FUNCTION:
@@ -288,6 +359,110 @@ func (p *Parser) analisarChamadaFuncao(tokenFuncao lexer.Token) (Expressao, erro
 	}, nil
 }
 
+// analisarDeclaracaoFuncao: 'definir' IDENT '(' params? ')' '{' bloco '}'
+func (p *Parser) analisarDeclaracaoFuncao() (Expressao, error) {
+	tokDef := p.proximoToken() // consumir 'definir'
+
+	// nome da função
+	nomeTok := p.proximoToken()
+	if nomeTok.Type != lexer.IDENTIFIER {
+		return nil, utils.NovoErro("nome de função inválido", nomeTok.Position.Line, nomeTok.Position.Column, "esperado identificador após 'definir'")
+	}
+
+	if err := p.verificarProximoToken(lexer.LPAREN); err != nil {
+		return nil, err
+	}
+
+	var params []string
+	var paramTipos []Tipo
+	if p.tokenAtual().Type != lexer.RPAREN {
+		for {
+			idTok := p.proximoToken()
+			if idTok.Type != lexer.IDENTIFIER {
+				return nil, utils.NovoErro("parâmetro inválido", idTok.Position.Line, idTok.Position.Column, "esperado identificador de parâmetro")
+			}
+			params = append(params, idTok.Value)
+			if p.tokenAtual().Type == lexer.COLON {
+				p.proximoToken()
+				tTok := p.proximoToken()
+				if tTok.Type != lexer.IDENTIFIER {
+					return nil, utils.NovoErro("tipo inválido", tTok.Position.Line, tTok.Position.Column, "esperado identificador de tipo")
+				}
+				tp, err := p.parseTipoPorNome(tTok.Value)
+				if err != nil {
+					return nil, utils.NovoErro("tipo inválido", tTok.Position.Line, tTok.Position.Column, err.Error())
+				}
+				paramTipos = append(paramTipos, tp)
+			} else {
+				paramTipos = append(paramTipos, TipoInteiro)
+			}
+			if p.tokenAtual().Type == lexer.COMMA {
+				p.proximoToken()
+				continue
+			}
+			break
+		}
+	}
+
+	if err := p.verificarProximoToken(lexer.RPAREN); err != nil {
+		return nil, err
+	}
+
+	// Retorno opcional: ':' <tipo> (default: inteiro)
+	var retorno Tipo = TipoInteiro
+	if p.tokenAtual().Type == lexer.COLON {
+		p.proximoToken()
+		tTok := p.proximoToken()
+		if tTok.Type != lexer.IDENTIFIER {
+			return nil, utils.NovoErro("tipo inválido", tTok.Position.Line, tTok.Position.Column, "esperado identificador de tipo")
+		}
+		tp, err := p.parseTipoPorNome(tTok.Value)
+		if err != nil {
+			return nil, utils.NovoErro("tipo inválido", tTok.Position.Line, tTok.Position.Column, err.Error())
+		}
+		retorno = tp
+	}
+
+	if err := p.verificarProximoToken(lexer.LBRACE); err != nil {
+		return nil, err
+	}
+
+	bloco, err := p.analisarBloco()
+	if err != nil {
+		return nil, err
+	}
+
+	return &FuncaoDeclaracao{Nome: nomeTok.Value, Parametros: params, ParamTipos: paramTipos, Retorno: retorno, Corpo: bloco, Token: tokDef}, nil
+}
+
+// parseTipoPorNome converte o nome do tipo em Tipo
+func (p *Parser) parseTipoPorNome(nome string) (Tipo, error) {
+	switch nome {
+	case "Inteiro":
+		return TipoInteiro, nil
+	case "Decimal":
+		return TipoDecimal, nil
+	case "Texto":
+		return TipoTexto, nil
+	case "Vazio":
+		return TipoVazio, nil
+	case "Booleano":
+		return TipoBooleano, nil
+	case "inteiro":
+		return TipoInteiro, nil
+	case "decimal":
+		return TipoDecimal, nil
+	case "texto":
+		return TipoTexto, nil
+	case "vazio":
+		return TipoVazio, nil
+	case "booleano":
+		return TipoBooleano, nil
+	default:
+		return 0, fmt.Errorf("tipo desconhecido '%s' (suportado: inteiro, decimal, texto, vazio, booleano)", nome)
+	}
+}
+
 // proximoToken retorna o próximo token e avança a posição
 func (p *Parser) proximoToken() lexer.Token {
 	if p.chegouAoFim() {
@@ -329,12 +504,17 @@ func (p *Parser) chegouAoFim() bool {
 
 // esperarSemicolon verifica se o próximo token é um semicolon e o consome
 func (p *Parser) esperarSemicolon() error {
-	if p.tokenAtual().Type != lexer.SEMICOLON {
-		token := p.tokenAtual()
-		return fmt.Errorf("esperado ';' em %s, encontrado '%s'", token.Position, token.Value)
+	tok := p.tokenAtual()
+	switch tok.Type {
+	case lexer.SEMICOLON:
+		p.proximoToken() // consome o semicolon
+		return nil
+	case lexer.RBRACE, lexer.EOF:
+		// Semicolon opcional antes de '}' ou no fim do arquivo
+		return nil
+	default:
+		return fmt.Errorf("esperado ';' em %s, encontrado '%s'", tok.Position, tok.Value)
 	}
-	p.proximoToken() // consome o semicolon
-	return nil
 }
 
 // analisarComandoSe analisa um comando if/else
@@ -395,10 +575,12 @@ func (p *Parser) analisarBloco() (*Bloco, error) {
 		}
 		comandos = append(comandos, comando)
 
-		// Estruturas de controle (como 'se') não precisam de semicolon
+		// Estruturas de controle (como 'se') e declarações de função não precisam de semicolon
 		if _, ehComandoSe := comando.(*ComandoSe); !ehComandoSe {
-			if err := p.esperarSemicolon(); err != nil {
-				return nil, err
+			if _, ehFuncDecl := comando.(*FuncaoDeclaracao); !ehFuncDecl {
+				if err := p.esperarSemicolon(); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -412,4 +594,107 @@ func (p *Parser) analisarBloco() (*Bloco, error) {
 		Comandos: comandos,
 		Token:    tokenInicio,
 	}, nil
+}
+
+// analisarComandoEnquanto: 'enquanto' (expr) '{' bloco '}'
+func (p *Parser) analisarComandoEnquanto() (Expressao, error) {
+	tok := p.proximoToken() // consumir 'enquanto'
+	// condição
+	cond, err := p.analisarExpressao(PRECEDENCIA_NENHUMA)
+	if err != nil {
+		return nil, err
+	}
+	if err := p.verificarProximoToken(lexer.LBRACE); err != nil {
+		return nil, err
+	}
+	corpo, err := p.analisarBloco()
+	if err != nil {
+		return nil, err
+	}
+	return &ComandoEnquanto{Condicao: cond, Corpo: corpo, Token: tok}, nil
+}
+
+// analisarComandoPara: 'para' '(' init? ';' cond? ';' pos? ')' '{' bloco '}'
+func (p *Parser) analisarComandoPara() (Expressao, error) {
+	tok := p.proximoToken() // consumir 'para'
+	if err := p.verificarProximoToken(lexer.LPAREN); err != nil {
+		return nil, err
+	}
+	// init (pode ser vazio)
+	var init Expressao
+	if p.tokenAtual().Type != lexer.SEMICOLON {
+		e, err := p.analisarAtribOuExpressao()
+		if err != nil {
+			return nil, err
+		}
+		init = e
+	}
+	if err := p.verificarProximoToken(lexer.SEMICOLON); err != nil {
+		return nil, err
+	}
+	// cond (pode ser vazia)
+	var cond Expressao
+	if p.tokenAtual().Type != lexer.SEMICOLON {
+		e, err := p.analisarExpressao(PRECEDENCIA_NENHUMA)
+		if err != nil {
+			return nil, err
+		}
+		cond = e
+	}
+	if err := p.verificarProximoToken(lexer.SEMICOLON); err != nil {
+		return nil, err
+	}
+	// pos (pode ser vazia)
+	var pos Expressao
+	if p.tokenAtual().Type != lexer.RPAREN {
+		e, err := p.analisarAtribOuExpressao()
+		if err != nil {
+			return nil, err
+		}
+		pos = e
+	}
+	if err := p.verificarProximoToken(lexer.RPAREN); err != nil {
+		return nil, err
+	}
+	if err := p.verificarProximoToken(lexer.LBRACE); err != nil {
+		return nil, err
+	}
+	corpo, err := p.analisarBloco()
+	if err != nil {
+		return nil, err
+	}
+	return &ComandoPara{Inicializacao: init, Condicao: cond, PosIteracao: pos, Corpo: corpo, Token: tok}, nil
+}
+
+// analisarAtribOuExpressao tenta analisar uma atribuição (com ou sem anotação de tipo) ou uma expressão
+func (p *Parser) analisarAtribOuExpressao() (Expressao, error) {
+	if p.tokenAtual().Type == lexer.IDENTIFIER {
+		// snapshot da posição
+		save := p.posicaoAtual
+		identTok := p.proximoToken() // consome o identificador
+		var tipoAnnot *Tipo
+		if p.tokenAtual().Type == lexer.COLON {
+			p.proximoToken()
+			tTok := p.proximoToken()
+			if tTok.Type != lexer.IDENTIFIER {
+				return nil, utils.NovoErro("tipo inválido", tTok.Position.Line, tTok.Position.Column, "esperado identificador de tipo")
+			}
+			tp, err := p.parseTipoPorNome(tTok.Value)
+			if err != nil {
+				return nil, utils.NovoErro("tipo inválido", tTok.Position.Line, tTok.Position.Column, err.Error())
+			}
+			tipoAnnot = &tp
+		}
+		if p.tokenAtual().Type == lexer.ASSIGN {
+			p.proximoToken() // consome '~>'
+			valor, err := p.analisarExpressao(PRECEDENCIA_NENHUMA)
+			if err != nil {
+				return nil, err
+			}
+			return &Atribuicao{Nome: identTok.Value, Valor: valor, Token: identTok, TipoAnotado: tipoAnnot}, nil
+		}
+		// não era atribuição: restaura e analisa como expressão
+		p.posicaoAtual = save
+	}
+	return p.analisarExpressao(PRECEDENCIA_NENHUMA)
 }

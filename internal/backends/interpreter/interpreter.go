@@ -13,11 +13,13 @@ import (
 
 type InterpreterBackend struct {
 	variaveis map[string]int
+	funcoes   map[string]*parser.FuncaoDeclaracao
 }
 
 func NewInterpreterBackend() *InterpreterBackend {
 	return &InterpreterBackend{
 		variaveis: make(map[string]int),
+		funcoes:   make(map[string]*parser.FuncaoDeclaracao),
 	}
 }
 
@@ -28,6 +30,13 @@ func (i *InterpreterBackend) Compile(statements []parser.Expressao) error {
 	debug.Printf("Interpretando diretamente da AST...\n")
 
 	var ultimoResultado interface{}
+
+	// Primeira passada: registrar declarações de funções para permitir chamadas antes da definição
+	for _, stmt := range statements {
+		if fn, ok := stmt.(*parser.FuncaoDeclaracao); ok {
+			i.funcoes[fn.Nome] = fn
+		}
+	}
 
 	for idx, stmt := range statements {
 		debug.Printf("--- Statement %d ---\n", idx+1)
@@ -62,6 +71,13 @@ func (i *InterpreterBackend) interpretar(expressao parser.Expressao) (interface{
 // Implementa interface Node (visitor pattern)
 func (i *InterpreterBackend) Constante(constante *parser.Constante) interface{} {
 	return constante.Valor
+}
+
+func (i *InterpreterBackend) Booleano(b *parser.Booleano) interface{} {
+	if b.Valor {
+		return 1
+	}
+	return 0
 }
 
 func (i *InterpreterBackend) Variavel(variavel *parser.Variavel) interface{} {
@@ -169,7 +185,12 @@ func (i *InterpreterBackend) OperacaoBinaria(operacao *parser.OperacaoBinaria) i
 
 // ChamadaFuncao implementa chamadas de função builtin
 func (i *InterpreterBackend) ChamadaFuncao(chamada *parser.ChamadaFuncao) interface{} {
-	// Valida a função usando o registro
+	// Primeiro verifica se é uma função definida pelo usuário
+	if fn, ok := i.funcoes[chamada.Nome]; ok {
+		return i.executarFuncaoUsuario(fn, chamada)
+	}
+
+	// Caso contrário, tenta como builtin
 	assinatura, ok := registry.RegistroGlobal.ObterAssinatura(chamada.Nome)
 	if !ok {
 		return utils.NovoErro(
@@ -275,18 +296,165 @@ func (i *InterpreterBackend) ComandoSe(comando *parser.ComandoSe) interface{} {
 	return 0
 }
 
+// Enquanto (while)
+func (i *InterpreterBackend) ComandoEnquanto(cmd *parser.ComandoEnquanto) interface{} {
+	var ultimo interface{} = 0
+	for {
+		c := cmd.Condicao.Aceitar(i)
+		if erro, ok := c.(error); ok {
+			return erro
+		}
+		if c.(int) == 0 {
+			break
+		}
+		r := cmd.Corpo.Aceitar(i)
+		if erro, ok := r.(error); ok {
+			return erro
+		}
+		if rv, ok := r.(retornoValor); ok {
+			return rv
+		}
+		ultimo = r
+	}
+	return ultimo
+}
+
+// Para (for)
+func (i *InterpreterBackend) ComandoPara(cmd *parser.ComandoPara) interface{} {
+	if cmd.Inicializacao != nil {
+		v := cmd.Inicializacao.Aceitar(i)
+		if erro, ok := v.(error); ok {
+			return erro
+		}
+	}
+	var ultimo interface{} = 0
+	for {
+		// condicao vazia => verdadeiro
+		cond := 1
+		if cmd.Condicao != nil {
+			c := cmd.Condicao.Aceitar(i)
+			if erro, ok := c.(error); ok {
+				return erro
+			}
+			cond = c.(int)
+		}
+		if cond == 0 {
+			break
+		}
+		r := cmd.Corpo.Aceitar(i)
+		if erro, ok := r.(error); ok {
+			return erro
+		}
+		if rv, ok := r.(retornoValor); ok {
+			return rv
+		}
+		ultimo = r
+		if cmd.PosIteracao != nil {
+			p := cmd.PosIteracao.Aceitar(i)
+			if erro, ok := p.(error); ok {
+				return erro
+			}
+		}
+	}
+	return ultimo
+}
+
 // Bloco implementa um bloco de comandos
 func (i *InterpreterBackend) Bloco(bloco *parser.Bloco) interface{} {
 	var ultimoResultado interface{} = 0
 
 	// Executa todos os comandos do bloco
 	for _, comando := range bloco.Comandos {
+		// Se for um retorno, propaga uma interrupção especial
+		if ret, ok := comando.(*parser.Retorno); ok {
+			if ret.Valor == nil {
+				return retornoValor{valor: 0}
+			}
+			val := ret.Valor.Aceitar(i)
+			if erro, ok := val.(error); ok {
+				return erro
+			}
+			return retornoValor{valor: val.(int)}
+		}
+
 		resultado := comando.Aceitar(i)
 		if erro, ok := resultado.(error); ok {
 			return erro
+		}
+		// Se um bloco interno retornou, propaga
+		if rv, ok := resultado.(retornoValor); ok {
+			return rv
 		}
 		ultimoResultado = resultado
 	}
 
 	return ultimoResultado
+}
+
+// Suporte a declaração de função do usuário
+func (i *InterpreterBackend) FuncaoDeclaracao(fn *parser.FuncaoDeclaracao) interface{} {
+	i.funcoes[fn.Nome] = fn
+	return 0
+}
+
+// Suporte a retorno (em nível de execução de bloco)
+func (i *InterpreterBackend) Retorno(ret *parser.Retorno) interface{} {
+	if ret.Valor == nil {
+		return retornoValor{valor: 0}
+	}
+	val := ret.Valor.Aceitar(i)
+	if erro, ok := val.(error); ok {
+		return erro
+	}
+	return retornoValor{valor: val.(int)}
+}
+
+// Estrutura para propagar retorno através do visitor
+type retornoValor struct{ valor int }
+
+// Executa função definida pelo usuário com escopo local
+func (i *InterpreterBackend) executarFuncaoUsuario(fn *parser.FuncaoDeclaracao, chamada *parser.ChamadaFuncao) interface{} {
+	// Verifica argumentos
+	if len(chamada.Argumentos) != len(fn.Parametros) {
+		return utils.NovoErro(
+			"erro na função",
+			chamada.Token.Position.Line,
+			chamada.Token.Position.Column,
+			fmt.Sprintf("Função '%s' espera %d argumento(s), recebeu %d", fn.Nome, len(fn.Parametros), len(chamada.Argumentos)),
+		)
+	}
+
+	// Salva contexto de variáveis e cria escopo local
+	antigo := i.variaveis
+	local := make(map[string]int)
+	i.variaveis = local
+
+	// Avalia e vincula parâmetros
+	for idx, param := range fn.Parametros {
+		v := chamada.Argumentos[idx].Aceitar(i)
+		if erro, ok := v.(error); ok {
+			i.variaveis = antigo
+			return erro
+		}
+		local[param] = v.(int)
+	}
+
+	// Executa corpo
+	resultado := fn.Corpo.Aceitar(i)
+
+	// Restaura escopo
+	i.variaveis = antigo
+
+	// Trata retorno explícito
+	if rv, ok := resultado.(retornoValor); ok {
+		return rv.valor
+	}
+
+	// Retorno implícito: valor da última expressão do bloco (0 se vazio)
+	switch r := resultado.(type) {
+	case int:
+		return r
+	default:
+		return 0
+	}
 }

@@ -52,6 +52,14 @@ func (c *Compiler) CompilarArquivo(arquivoEntrada string, backendType string, ar
 		return err
 	}
 
+	// Checagem de tipos (semântica)
+	if err := c.checagemTipos(statements); err != nil {
+		if c.debug {
+			fmt.Printf("Erro na checagem de tipos: %v\n", err)
+		}
+		return err
+	}
+
 	// Seleciona e executa backend
 	return c.executarBackend(statements, backendType, arch)
 }
@@ -110,4 +118,10 @@ func (c *Compiler) analisarSintaxe(tokens []lexer.Token) ([]parser.Expressao, er
 		return nil, err
 	}
 	return statements, nil
+}
+
+// checagemTipos executa a validação de tipos sobre a AST
+func (c *Compiler) checagemTipos(statements []parser.Expressao) error {
+	tc := NovoTypeChecker()
+	return tc.Check(statements)
 }

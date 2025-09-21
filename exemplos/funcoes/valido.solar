@@ -1,0 +1,16 @@
+// Exemplo de funções do usuário
+// define uma função que soma dois números e imprime
+
+definir soma2(a, b) {
+  imprime(a + b);
+}
+
+// define uma função pura que retorna quadrado
+
+definir quadrado(x) {
+  x * x;
+}
+
+// usa as funções
+soma2(3, 4);
+imprime(quadrado(5));
