@@ -35,9 +35,13 @@ func (a *X86_64Backend) Compile(statements []parser.Expressao) error {
 	debug.Printf("Compilando para Assembly x86-64...\n")
 
 	// Primeira passada: coletar funções
+	var funcaoPrincipal *parser.FuncaoDeclaracao
 	for _, s := range statements {
 		if fn, ok := s.(*parser.FuncaoDeclaracao); ok {
 			a.functions[fn.Nome] = fn
+			if fn.Nome == "principal" {
+				funcaoPrincipal = fn
+			}
 		}
 	}
 
@@ -48,22 +52,18 @@ func (a *X86_64Backend) Compile(statements []parser.Expressao) error {
 		a.gerarFuncaoUsuario(nome, fn)
 	}
 
-	// Processa statements
-	for i, stmt := range statements {
-		debug.Printf("  Processando statement %d...\n", i+1)
-		a.checarExpressao(stmt)
-
-		// Se for a última expressão, imprime resultado somente se a expressão produz valor
-		if i == len(statements)-1 {
-			switch s := stmt.(type) {
-			case *parser.Constante, *parser.Variavel, *parser.OperacaoBinaria:
-				a.output.WriteString("    call imprime_num\n")
-			case *parser.ChamadaFuncao:
-				if sig, ok := registry.RegistroGlobal.ObterAssinatura(s.Nome); ok {
-					if sig.TipoFuncao == registry.FUNCAO_PURA {
-						a.output.WriteString("    call imprime_num\n")
-					}
-				}
+	// Se existe função principal(), chama ela. Senão, executa statements globais
+	if funcaoPrincipal != nil {
+		debug.Printf("  Chamando função principal()...\n")
+		// Chama a função principal()
+		a.output.WriteString("    call principal\n")
+	} else {
+		// Processa statements globais (comportamento antigo)
+		for i, stmt := range statements {
+			// Pula declarações de função pois já foram processadas
+			if _, ok := stmt.(*parser.FuncaoDeclaracao); !ok {
+				debug.Printf("  Processando statement global %d...\n", i+1)
+				a.checarExpressao(stmt)
 			}
 		}
 	}
@@ -231,50 +231,8 @@ func (a *X86_64Backend) gerarAssemblyImprime(argumentos []parser.Expressao) {
 
 // gerarAssemblyFuncaoPura gera código assembly para funções puras
 func (a *X86_64Backend) gerarAssemblyFuncaoPura(nome string, argumentos []parser.Expressao) {
-	// Avalia argumentos
-	for _, argumento := range argumentos {
-		argumento.Aceitar(a)
-		a.output.WriteString("    push %rax\n") // Salva argumento na pilha
-	}
-
-	// Chama função específica
-	switch nome {
-	case "soma":
-		a.gerarAssemblySoma(len(argumentos))
-	case "abs":
-		a.gerarAssemblyAbs()
-	}
-}
-
-// gerarAssemblySoma gera assembly para soma de múltiplos valores
-func (a *X86_64Backend) gerarAssemblySoma(numArgs int) {
-	if numArgs == 0 {
-		a.output.WriteString("    mov $0, %rax\n")
-		return
-	}
-
-	// Pop primeiro argumento
-	a.output.WriteString("    pop %rax\n")
-
-	// Soma os demais argumentos
-	for i := 1; i < numArgs; i++ {
-		a.output.WriteString("    pop %rbx\n")
-		a.output.WriteString("    add %rbx, %rax\n")
-	}
-}
-
-// gerarAssemblyAbs gera assembly para valor absoluto
-func (a *X86_64Backend) gerarAssemblyAbs() {
-	// Usa um label único para evitar colisões
-	id := a.labelCount
-	a.labelCount++
-	label := fmt.Sprintf("abs_positive_%d", id)
-
-	a.output.WriteString("    pop %rax\n")
-	a.output.WriteString("    test %rax, %rax\n")
-	a.output.WriteString(fmt.Sprintf("    jns %s\n", label))
-	a.output.WriteString("    neg %rax\n")
-	a.output.WriteString(fmt.Sprintf("%s:\n", label))
+	// Nenhuma função pura builtin implementada no momento
+	// As funções puras são delegadas para o registry global
 }
 
 func (a *X86_64Backend) gerarPrologo() {

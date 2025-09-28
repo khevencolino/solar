@@ -1,0 +1,6 @@
+// Exemplo simples com função principal()
+
+definir principal() {
+  imprime(42);
+  imprime(3 + 4);
+}

@@ -32,27 +32,58 @@ func (i *InterpreterBackend) Compile(statements []parser.Expressao) error {
 	var ultimoResultado interface{}
 
 	// Primeira passada: registrar declarações de funções para permitir chamadas antes da definição
+	var funcaoPrincipal *parser.FuncaoDeclaracao
 	for _, stmt := range statements {
 		if fn, ok := stmt.(*parser.FuncaoDeclaracao); ok {
 			i.funcoes[fn.Nome] = fn
+			if fn.Nome == "principal" {
+				funcaoPrincipal = fn
+			}
 		}
 	}
 
-	for idx, stmt := range statements {
-		debug.Printf("--- Statement %d ---\n", idx+1)
+	// Se existe função principal(), chama ela. Senão, executa statements globais
+	if funcaoPrincipal != nil {
+		debug.Printf("--- Executando função principal() ---\n")
 
-		// Imprime a árvore (opcional - pode ser configurável)
-		visualizador := parser.NovoVisualizador()
-		visualizador.ImprimirArvore(stmt)
+		// Imprime a árvore da função principal (opcional)
+		if debug.Enabled {
+			fmt.Printf("\nÁrvore da função principal:\n")
+			visualizador := parser.NovoVisualizador()
+			visualizador.ImprimirArvore(funcaoPrincipal)
+		}
 
-		// Interpreta
-		resultado, err := i.interpretar(stmt)
+		// Executa a função principal
+		resultado, err := i.interpretar(funcaoPrincipal.Corpo)
 		if err != nil {
 			return err
 		}
-
-		fmt.Printf("Resultado: %d\n", resultado)
 		ultimoResultado = resultado
+	} else {
+		// Executa statements globais (comportamento antigo, vou manter por compatibilidade, ou remover dps)
+		for idx, stmt := range statements {
+			// Pula declarações de função pois já foram processadas
+			if _, ok := stmt.(*parser.FuncaoDeclaracao); ok {
+				continue
+			}
+
+			debug.Printf("--- Statement global %d ---\n", idx+1)
+
+			// Imprime a árvore (opcional)
+			if debug.Enabled {
+				fmt.Printf("\nÁrvore da expressão:\n")
+				visualizador := parser.NovoVisualizador()
+				visualizador.ImprimirArvore(stmt)
+			}
+
+			// Interpreta
+			resultado, err := i.interpretar(stmt)
+			if err != nil {
+				return err
+			}
+
+			ultimoResultado = resultado
+		}
 	}
 
 	debug.Printf("\n Interpretação concluída! Resultado final: %d\n", ultimoResultado)

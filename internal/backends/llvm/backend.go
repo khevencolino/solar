@@ -2,6 +2,8 @@ package llvm
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/khevencolino/Solar/internal/debug"
 	"github.com/khevencolino/Solar/internal/parser"
+	"github.com/khevencolino/Solar/internal/registry"
 	"github.com/khevencolino/Solar/internal/utils"
 )
 
@@ -47,9 +50,13 @@ func (l *LLVMBackend) Compile(statements []parser.Expressao) error {
 	printf.Sig.Variadic = true
 
 	// Primeira passada: declarar protótipos de funções do usuário
+	var funcaoPrincipal *parser.FuncaoDeclaracao
 	for _, st := range statements {
 		if fn, ok := st.(*parser.FuncaoDeclaracao); ok {
 			l.declararFuncaoUsuario(fn)
+			if fn.Nome == "principal" {
+				funcaoPrincipal = fn
+			}
 		}
 	}
 
@@ -57,19 +64,21 @@ func (l *LLVMBackend) Compile(statements []parser.Expressao) error {
 	l.function = l.module.NewFunc("main", types.I32)
 	l.block = l.function.NewBlock("")
 
-	// Processa statements
-	var resultado value.Value
-	for i, stmt := range statements {
-		debug.Printf("  Processando statement %d...\n", i+1)
-		val := l.processarExpressao(stmt)
-		if val != nil {
-			resultado = val
+	// Se existe função principal(), chama ela. Senão, executa statements globais
+	if funcaoPrincipal != nil {
+		debug.Printf("  Chamando função principal()...\n")
+		// Chama a função principal()
+		principalFunc := l.userFuncs[funcaoPrincipal.Nome]
+		l.block.NewCall(principalFunc)
+	} else {
+		// Processa statements globais (comportamento antigo)
+		for i, stmt := range statements {
+			// Pula declarações de função pois já foram processadas
+			if _, ok := stmt.(*parser.FuncaoDeclaracao); !ok {
+				debug.Printf("  Processando statement global %d...\n", i+1)
+				l.processarExpressao(stmt)
+			}
 		}
-	}
-
-	// Se há resultado, imprime
-	if resultado != nil {
-		l.imprimirValor(resultado)
 	}
 
 	// Retorna 0
@@ -82,82 +91,82 @@ func (l *LLVMBackend) Compile(statements []parser.Expressao) error {
 	}
 
 	debug.Printf("Arquivo LLVM IR gerado em: %s\n", arquivoSaida)
+
+	// Tenta compilar para executável se disponível
+	if err := l.compilarParaExecutavel(arquivoSaida); err != nil {
+		debug.Printf("Aviso: Não foi possível compilar para executável: %v\n", err)
+		debug.Printf("Use 'clang programa.ll -o programa' para compilar manualmente\n")
+	}
+
 	return nil
 }
 
 func (l *LLVMBackend) processarExpressao(expr parser.Expressao) value.Value {
-	switch e := expr.(type) {
-	case *parser.Constante:
-		return constant.NewInt(types.I64, int64(e.Valor))
-	case *parser.Booleano:
-		if e.Valor {
-			return constant.NewInt(types.I64, 1)
-		}
-		return constant.NewInt(types.I64, 0)
-
-	case *parser.Variavel:
-		if val, ok := l.getVar(e.Nome); ok {
-			return val
-		}
-		fmt.Printf("Variável '%s' não definida\n", e.Nome)
-		return constant.NewInt(types.I64, 0)
-
-	case *parser.OperacaoBinaria:
-		return l.processarOperacao(e)
-
-	case *parser.Atribuicao:
-		valor := l.processarExpressao(e.Valor)
-		l.setVar(e.Nome, valor)
-		return valor
-
-	case *parser.ChamadaFuncao:
-		return l.processarFuncao(e)
-
-	case *parser.ComandoSe:
-		return l.processarComandoSe(e)
-	case *parser.ComandoEnquanto:
-		return l.processarEnquanto(e)
-	case *parser.ComandoPara:
-		return l.processarPara(e)
-
-	case *parser.Bloco:
-		return l.processarBloco(e)
-
-	case *parser.FuncaoDeclaracao:
-		l.definirFuncaoUsuario(e)
-		return constant.NewInt(types.I64, 0)
-
-	case *parser.Retorno:
-		if e.Valor != nil {
-			v := l.processarExpressao(e.Valor)
-			if l.function != nil {
-				l.block.NewRet(v)
-			}
-			return v
-		}
-		if l.function != nil {
-			l.block.NewRet(constant.NewInt(types.I64, 0))
-		}
-		return constant.NewInt(types.I64, 0)
-
-	default:
-		fmt.Printf("Tipo de expressão não suportado: %T\n", expr)
-		return constant.NewInt(types.I64, 0)
+	result := expr.Aceitar(l)
+	if val, ok := result.(value.Value); ok {
+		return val
 	}
+	return constant.NewInt(types.I64, 0)
 }
 
-func (l *LLVMBackend) processarOperacao(op *parser.OperacaoBinaria) value.Value {
-	esquerda := l.processarExpressao(op.OperandoEsquerdo)
-	direita := l.processarExpressao(op.OperandoDireito)
+// Helper para processar expressões que retornam value.Value
+func (l *LLVMBackend) processarExpressaoValue(expr parser.Expressao) value.Value {
+	return l.processarExpressao(expr)
+}
+
+// Implementação da interface visitor
+func (l *LLVMBackend) Constante(constante *parser.Constante) interface{} {
+	return constant.NewInt(types.I64, int64(constante.Valor))
+}
+
+func (l *LLVMBackend) Booleano(b *parser.Booleano) interface{} {
+	if b.Valor {
+		return constant.NewInt(types.I64, 1)
+	}
+	return constant.NewInt(types.I64, 0)
+}
+
+func (l *LLVMBackend) Variavel(variavel *parser.Variavel) interface{} {
+	if val, ok := l.getVar(variavel.Nome); ok {
+		// Se é um ponteiro (alloca), carrega o valor
+		if alloca, isAlloca := val.(*ir.InstAlloca); isAlloca {
+			return l.block.NewLoad(types.I64, alloca)
+		}
+		return val
+	}
+	fmt.Printf("Variável '%s' não definida\n", variavel.Nome)
+	return constant.NewInt(types.I64, 0)
+}
+
+func (l *LLVMBackend) Atribuicao(atribuicao *parser.Atribuicao) interface{} {
+	valor := l.processarExpressaoValue(atribuicao.Valor)
+
+	// Verifica se a variável já existe
+	if existente, ok := l.getVar(atribuicao.Nome); ok {
+		// Se é um alloca existente, armazena nele
+		if alloca, isAlloca := existente.(*ir.InstAlloca); isAlloca {
+			l.block.NewStore(valor, alloca)
+			return valor
+		}
+	}
+
+	// Cria nova variável usando alloca
+	alloca := l.block.NewAlloca(types.I64)
+	l.block.NewStore(valor, alloca)
+	l.setVar(atribuicao.Nome, alloca)
+	return valor
+}
+
+func (l *LLVMBackend) OperacaoBinaria(operacao *parser.OperacaoBinaria) interface{} {
+	esquerda := l.processarExpressaoValue(operacao.OperandoEsquerdo)
+	direita := l.processarExpressaoValue(operacao.OperandoDireito)
 
 	// Verifica se os operandos são válidos
 	if esquerda == nil || direita == nil {
 		return constant.NewInt(types.I64, 0)
 	}
 
-	l.tmpCount++
-
-	switch op.Operador {
+	switch operacao.Operador {
 	case parser.ADICAO:
 		return l.block.NewAdd(esquerda, direita)
 
@@ -168,19 +177,34 @@ func (l *LLVMBackend) processarOperacao(op *parser.OperacaoBinaria) value.Value 
 		return l.block.NewMul(esquerda, direita)
 
 	case parser.DIVISAO:
-		return l.block.NewSDiv(esquerda, direita)
+		// Proteção contra divisão por zero
+		zero := constant.NewInt(types.I64, 0)
+		cond := l.block.NewICmp(enum.IPredEQ, direita, zero)
+
+		// Cria blocos para tratamento de divisão por zero
+		divZeroBlock := l.function.NewBlock("div_zero")
+		divOkBlock := l.function.NewBlock("div_ok")
+		mergeBlock := l.function.NewBlock("div_merge")
+
+		l.block.NewCondBr(cond, divZeroBlock, divOkBlock)
+
+		// Bloco de divisão por zero: retorna 0
+		divZeroBlock.NewBr(mergeBlock)
+		zeroResult := constant.NewInt(types.I64, 0)
+
+		// Bloco de divisão normal
+		l.block = divOkBlock
+		divResult := l.block.NewSDiv(esquerda, direita)
+		l.block.NewBr(mergeBlock)
+
+		// Merge usando phi
+		l.block = mergeBlock
+		phi := mergeBlock.NewPhi(ir.NewIncoming(zeroResult, divZeroBlock), ir.NewIncoming(divResult, divOkBlock))
+		return phi
 
 	case parser.POWER:
-		pow := l.module.NewFunc("pow", types.Double,
-			ir.NewParam("base", types.Double),
-			ir.NewParam("exp", types.Double))
-
-		esquerdaDouble := l.block.NewSIToFP(esquerda, types.Double)
-		direitaDouble := l.block.NewSIToFP(direita, types.Double)
-
-		powResult := l.block.NewCall(pow, esquerdaDouble, direitaDouble)
-
-		return l.block.NewFPToSI(powResult, types.I64)
+		// Implementação simples de potência usando loop
+		return l.implementarPotencia(esquerda, direita)
 
 	// Operações de comparação
 	case parser.IGUALDADE:
@@ -208,7 +232,7 @@ func (l *LLVMBackend) processarOperacao(op *parser.OperacaoBinaria) value.Value 
 		return l.block.NewZExt(cmp, types.I64)
 
 	default:
-		fmt.Printf("Operador não suportado: %s\n", op.Operador.String())
+		fmt.Printf("Operador não suportado: %s\n", operacao.Operador.String())
 		return constant.NewInt(types.I64, 0)
 	}
 }
@@ -224,61 +248,44 @@ func (l *LLVMBackend) processarFuncao(fn *parser.ChamadaFuncao) value.Value {
 		call := l.block.NewCall(uf, args...)
 		return call
 	}
-	switch fn.Nome {
-	case "imprime":
-		if len(fn.Argumentos) > 0 {
+	// Verifica se é função builtin no registry
+	if assinatura, ok := registry.RegistroGlobal.ObterAssinatura(fn.Nome); ok {
+		// Avalia argumentos
+		var args []interface{}
+		for _, arg := range fn.Argumentos {
+			valor := l.processarExpressao(arg)
+			// Converte value.Value para interface{} extraindo o valor
+			if constVal, ok := valor.(*constant.Int); ok {
+				args = append(args, int(constVal.X.Int64()))
+			} else {
+				// Para valores não constantes, não podemos processar em tempo de compilação
+				fmt.Printf("Aviso: função builtin '%s' com argumentos não constantes\n", fn.Nome)
+				return constant.NewInt(types.I64, 0)
+			}
+		}
+
+		switch assinatura.TipoFuncao {
+		case registry.FUNCAO_IMPRIME:
+			// Implementa função imprime
 			for _, arg := range fn.Argumentos {
 				valor := l.processarExpressao(arg)
 				l.imprimirValor(valor)
 			}
-		}
-		return constant.NewInt(types.I64, 0)
+			return constant.NewInt(types.I64, 0)
 
-	case "soma":
-		if len(fn.Argumentos) >= 2 {
-			resultado := l.processarExpressao(fn.Argumentos[0])
-			for i := 1; i < len(fn.Argumentos); i++ {
-				arg := l.processarExpressao(fn.Argumentos[i])
-				resultado = l.block.NewAdd(resultado, arg)
+		case registry.FUNCAO_PURA:
+			// Executa função pura e retorna resultado como constante
+			resultado, err := registry.RegistroGlobal.ExecutarFuncao(fn.Nome, args)
+			if err != nil {
+				fmt.Printf("Erro ao executar função '%s': %v\n", fn.Nome, err)
+				return constant.NewInt(types.I64, 0)
 			}
-			return resultado
+			return constant.NewInt(types.I64, int64(resultado.(int)))
 		}
-		return constant.NewInt(types.I64, 0)
-
-	case "abs":
-		if len(fn.Argumentos) == 1 {
-			valor := l.processarExpressao(fn.Argumentos[0])
-			zero := constant.NewInt(types.I64, 0)
-
-			// Verifica se valor < 0
-			cond := l.block.NewICmp(enum.IPredSLT, valor, zero)
-
-			// Cria blocos para if/else
-			thenBlock := l.function.NewBlock("")
-			elseBlock := l.function.NewBlock("")
-			mergeBlock := l.function.NewBlock("")
-
-			l.block.NewCondBr(cond, thenBlock, elseBlock)
-
-			// Bloco then: retorna -valor
-			thenBlock.NewBr(mergeBlock)
-			negValue := thenBlock.NewSub(zero, valor)
-
-			// Bloco else: retorna valor
-			elseBlock.NewBr(mergeBlock)
-
-			// Bloco merge: phi node para resultado
-			l.block = mergeBlock
-			phi := mergeBlock.NewPhi(ir.NewIncoming(negValue, thenBlock), ir.NewIncoming(valor, elseBlock))
-
-			return phi
-		}
-		return constant.NewInt(types.I64, 0)
-
-	default:
-		fmt.Printf("Função '%s' não implementada\n", fn.Nome)
-		return constant.NewInt(types.I64, 0)
 	}
+
+	fmt.Printf("Função '%s' não implementada\n", fn.Nome)
+	return constant.NewInt(types.I64, 0)
 }
 
 func (l *LLVMBackend) imprimirValor(valor value.Value) {
@@ -522,4 +529,116 @@ func (l *LLVMBackend) getVar(name string) (value.Value, bool) {
 		}
 	}
 	return nil, false
+}
+
+func (l *LLVMBackend) ChamadaFuncao(chamada *parser.ChamadaFuncao) interface{} {
+	return l.processarFuncao(chamada)
+}
+
+func (l *LLVMBackend) ComandoSe(comando *parser.ComandoSe) interface{} {
+	return l.processarComandoSe(comando)
+}
+
+func (l *LLVMBackend) ComandoEnquanto(cmd *parser.ComandoEnquanto) interface{} {
+	return l.processarEnquanto(cmd)
+}
+
+func (l *LLVMBackend) ComandoPara(cmd *parser.ComandoPara) interface{} {
+	return l.processarPara(cmd)
+}
+
+func (l *LLVMBackend) Bloco(bloco *parser.Bloco) interface{} {
+	return l.processarBloco(bloco)
+}
+
+func (l *LLVMBackend) FuncaoDeclaracao(fn *parser.FuncaoDeclaracao) interface{} {
+	l.definirFuncaoUsuario(fn)
+	return constant.NewInt(types.I64, 0)
+}
+
+func (l *LLVMBackend) Retorno(ret *parser.Retorno) interface{} {
+	if ret.Valor != nil {
+		v := l.processarExpressaoValue(ret.Valor)
+		if l.function != nil {
+			l.block.NewRet(v)
+		}
+		return v
+	}
+	if l.function != nil {
+		l.block.NewRet(constant.NewInt(types.I64, 0))
+	}
+	return constant.NewInt(types.I64, 0)
+}
+
+// Implementa potência usando loop iterativo
+func (l *LLVMBackend) implementarPotencia(base, exp value.Value) value.Value {
+	// Cria blocos para o loop de potência
+	checkBlock := l.function.NewBlock("pow_check")
+	loopBlock := l.function.NewBlock("pow_loop")
+	endBlock := l.function.NewBlock("pow_end")
+
+	// Aloca variáveis locais para o loop
+	resultAlloca := l.block.NewAlloca(types.I64)
+	expAlloca := l.block.NewAlloca(types.I64)
+
+	// Inicializa: result = 1, exp_temp = exp
+	l.block.NewStore(constant.NewInt(types.I64, 1), resultAlloca)
+	l.block.NewStore(exp, expAlloca)
+
+	// Pula para verificação
+	l.block.NewBr(checkBlock)
+
+	// Bloco de verificação: exp_temp > 0?
+	l.block = checkBlock
+	expTemp := l.block.NewLoad(types.I64, expAlloca)
+	zero := constant.NewInt(types.I64, 0)
+	cond := l.block.NewICmp(enum.IPredSGT, expTemp, zero)
+	l.block.NewCondBr(cond, loopBlock, endBlock)
+
+	// Bloco de loop: result *= base, exp_temp--
+	l.block = loopBlock
+	currentResult := l.block.NewLoad(types.I64, resultAlloca)
+	newResult := l.block.NewMul(currentResult, base)
+	l.block.NewStore(newResult, resultAlloca)
+
+	currentExp := l.block.NewLoad(types.I64, expAlloca)
+	one := constant.NewInt(types.I64, 1)
+	newExp := l.block.NewSub(currentExp, one)
+	l.block.NewStore(newExp, expAlloca)
+
+	l.block.NewBr(checkBlock)
+
+	// Bloco final: retorna resultado
+	l.block = endBlock
+	finalResult := l.block.NewLoad(types.I64, resultAlloca)
+	return finalResult
+}
+
+// Tenta compilar o LLVM IR para um executável usando clang
+func (l *LLVMBackend) compilarParaExecutavel(arquivoLLVM string) error {
+	debug.Printf("Tentando compilar LLVM IR para executável...\n")
+
+	// Cria diretório result se não existir
+	if err := os.MkdirAll("result", 0755); err != nil {
+		return fmt.Errorf("erro ao criar diretório result: %v", err)
+	}
+
+	// Tenta usar clang para compilar
+	executavel := "result/programa"
+	cmd := exec.Command("clang", "-O2", "-o", executavel, arquivoLLVM)
+
+	if err := cmd.Run(); err != nil {
+		// Se clang não estiver disponível, tenta lli para interpretação
+		debug.Printf("clang não disponível, tentando lli...\n")
+		cmdLli := exec.Command("lli", arquivoLLVM)
+		if err := cmdLli.Run(); err != nil {
+			return fmt.Errorf("nem clang nem lli estão disponíveis")
+		}
+		debug.Printf("Executado via lli (interpretador LLVM)\n")
+		return nil
+	}
+
+	debug.Printf("Executável gerado em: %s\n", executavel)
+	debug.Printf("Para executar: ./%s\n", executavel)
+	return nil
 }

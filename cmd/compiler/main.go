@@ -23,7 +23,7 @@ func main() {
 	compilador := compiler.NovoCompilador()
 
 	if err := compilador.CompilarArquivo(arquivoEntrada, backend, arch, debug); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Erro de compilação: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Erro de compilação: %v\n", err)
 		os.Exit(1)
 	}
 }
