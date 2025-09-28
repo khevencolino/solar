@@ -10,6 +10,8 @@ import (
 type Node interface {
 	Constante(constante *Constante) interface{}
 	Booleano(boolLit *Booleano) interface{}
+	LiteralTexto(literal *LiteralTexto) interface{}
+	LiteralDecimal(literal *LiteralDecimal) interface{}
 	OperacaoBinaria(operacao *OperacaoBinaria) interface{}
 	Variavel(variavel *Variavel) interface{}
 	Atribuicao(atribuicao *Atribuicao) interface{}
@@ -20,6 +22,7 @@ type Node interface {
 	Bloco(bloco *Bloco) interface{}
 	FuncaoDeclaracao(fn *FuncaoDeclaracao) interface{}
 	Retorno(ret *Retorno) interface{}
+	Importacao(imp *Importacao) interface{}
 }
 
 // Expressao representa a interface base para todos os nós da AST
@@ -56,6 +59,28 @@ func (b *Booleano) String() string {
 		return "verdadeiro"
 	}
 	return "falso"
+}
+
+// LiteralTexto representa um literal de string na árvore
+type LiteralTexto struct {
+	Valor string
+	Token lexer.Token
+}
+
+func (lt *LiteralTexto) Aceitar(node Node) interface{} { return node.LiteralTexto(lt) }
+func (lt *LiteralTexto) String() string {
+	return fmt.Sprintf("\"%s\"", lt.Valor)
+}
+
+// LiteralDecimal representa um literal decimal na árvore
+type LiteralDecimal struct {
+	Valor float64
+	Token lexer.Token
+}
+
+func (ld *LiteralDecimal) Aceitar(node Node) interface{} { return node.LiteralDecimal(ld) }
+func (ld *LiteralDecimal) String() string {
+	return fmt.Sprintf("%g", ld.Valor)
 }
 
 // OperacaoBinaria representa uma operação binária na árvore
@@ -310,4 +335,20 @@ func (r *Retorno) String() string {
 		return "retornar"
 	}
 	return fmt.Sprintf("retornar %s", r.Valor.String())
+}
+
+// Importacao representa uma declaração de importação na árvore
+type Importacao struct {
+	Simbolos []string // Lista de símbolos a importar (função/variável)
+	Modulo   string   // Caminho do módulo/arquivo
+	Token    lexer.Token
+}
+
+func (i *Importacao) Aceitar(node Node) any { return node.Importacao(i) }
+
+func (i *Importacao) String() string {
+	if len(i.Simbolos) == 1 {
+		return fmt.Sprintf("importar %s de %s", i.Simbolos[0], i.Modulo)
+	}
+	return fmt.Sprintf("importar %v de %s", i.Simbolos, i.Modulo)
 }

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"unsafe"
 
 	"github.com/khevencolino/Solar/internal/debug"
 	"github.com/khevencolino/Solar/internal/parser"
@@ -17,6 +18,8 @@ import (
 type X86_64Backend struct {
 	output     strings.Builder
 	variables  map[string]bool
+	decimals   map[string]float64
+	strings    map[string]string
 	labelCount int
 	functions  map[string]*parser.FuncaoDeclaracao
 }
@@ -24,6 +27,8 @@ type X86_64Backend struct {
 func NewX86_64Backend() *X86_64Backend {
 	return &X86_64Backend{
 		variables: make(map[string]bool),
+		decimals:  make(map[string]float64),
+		strings:   make(map[string]string),
 		functions: make(map[string]*parser.FuncaoDeclaracao),
 	}
 }
@@ -89,6 +94,7 @@ func (a *X86_64Backend) checarExpressao(expr parser.Expressao) {
 
 // Implementação da interface visitor
 func (a *X86_64Backend) Constante(constante *parser.Constante) interface{} {
+	// Suporte completo a números inteiros, incluindo negativos
 	a.output.WriteString(fmt.Sprintf("    mov $%d, %%rax\n", constante.Valor))
 	return nil
 }
@@ -99,6 +105,41 @@ func (a *X86_64Backend) Booleano(b *parser.Booleano) interface{} {
 	} else {
 		a.output.WriteString("    mov $0, %rax\n")
 	}
+	return nil
+}
+
+func (a *X86_64Backend) LiteralTexto(literal *parser.LiteralTexto) interface{} {
+	// Implementa suporte a strings criando um label único
+	labelCount := a.labelCount
+	a.labelCount++
+	label := fmt.Sprintf("str_%d", labelCount)
+
+	// Armazena a string na seção .data
+	a.declararString(label, literal.Valor)
+
+	// Carrega o endereço da string em %rax
+	a.output.WriteString(fmt.Sprintf("    lea %s(%%rip), %%rax\n", label))
+
+	return nil
+}
+
+func (a *X86_64Backend) LiteralDecimal(literal *parser.LiteralDecimal) interface{} {
+	// Implementa suporte a números de ponto flutuante usando SSE
+	// Cria um label único para armazenar o valor decimal na seção .data
+	labelCount := a.labelCount
+	a.labelCount++
+	label := fmt.Sprintf("decimal_%d", labelCount)
+
+	// Armazena o valor decimal como double (8 bytes)
+	a.declararDecimal(label, literal.Valor)
+
+	// Carrega o valor decimal no registrador XMM0 (ponto flutuante)
+	a.output.WriteString(fmt.Sprintf("    movsd %s(%%rip), %%xmm0\n", label))
+
+	// Para compatibilidade com código existente que espera inteiros em %rax,
+	// converte o double para inteiro e move para %rax
+	a.output.WriteString("    cvttsd2si %xmm0, %rax\n")
+
 	return nil
 }
 
@@ -250,12 +291,30 @@ func (a *X86_64Backend) gerarPrologo() {
 func (a *X86_64Backend) gerarEpilogo() {
 	a.output.WriteString("    call sair\n\n")
 
-	// Adiciona seção de dados para variáveis
-	if len(a.variables) > 0 {
+	// Adiciona seção de dados para variáveis, decimais e strings
+	if len(a.variables) > 0 || len(a.decimals) > 0 || len(a.strings) > 0 {
 		dataSection := ".section .data\n"
+
+		// Variáveis inteiras
 		for varName := range a.variables {
 			dataSection += fmt.Sprintf("%s: .quad 0\n", a.getVarName(varName))
 		}
+
+		// Decimais (double precision)
+		for label, valor := range a.decimals {
+			// Converte float64 para representação hexadecimal IEEE 754
+			bits := fmt.Sprintf("0x%016x", *(*uint64)(unsafe.Pointer(&valor)))
+			dataSection += fmt.Sprintf("%s: .quad %s\n", label, bits)
+		}
+
+		// Strings
+		for label, valor := range a.strings {
+			// Escapa caracteres especiais e adiciona terminador nulo
+			escapedStr := strings.ReplaceAll(valor, "\\", "\\\\")
+			escapedStr = strings.ReplaceAll(escapedStr, "\"", "\\\"")
+			dataSection += fmt.Sprintf("%s: .ascii \"%s\\0\"\n", label, escapedStr)
+		}
+
 		// Substitui seção de dados no início
 		fullCode := strings.Replace(a.output.String(), ".section .data\n", dataSection, 1)
 		a.output.Reset()
@@ -391,9 +450,18 @@ func (a *X86_64Backend) gerarFuncaoUsuario(nome string, fn *parser.FuncaoDeclara
 
 func (a *X86_64Backend) FuncaoDeclaracao(fn *parser.FuncaoDeclaracao) interface{} { return nil }
 func (a *X86_64Backend) Retorno(ret *parser.Retorno) interface{}                  { return nil }
+func (a *X86_64Backend) Importacao(imp *parser.Importacao) interface{}            { return nil }
 
 func (a *X86_64Backend) declararVariavel(nome string) {
 	a.variables[nome] = true
+}
+
+func (a *X86_64Backend) declararDecimal(nome string, valor float64) {
+	a.decimals[nome] = valor
+}
+
+func (a *X86_64Backend) declararString(nome string, valor string) {
+	a.strings[nome] = valor
 }
 
 func (a *X86_64Backend) getVarName(nome string) string {

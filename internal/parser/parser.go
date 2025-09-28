@@ -119,6 +119,11 @@ func (p *Parser) analisarStatement() (Expressao, error) {
 		return p.analisarRetorno()
 	}
 
+	// Verifica se é uma importação
+	if token.Type == lexer.IMPORTAR {
+		return p.analisarImportacao()
+	}
+
 	// Verifica se é uma atribuição (com ou sem anotação de tipo)
 	if token.Type == lexer.IDENTIFIER {
 		p.proximoToken() // consome o identificador
@@ -171,6 +176,53 @@ func (p *Parser) analisarRetorno() (Expressao, error) {
 		expr = e
 	}
 	return &Retorno{Valor: expr, Token: tok}, nil
+}
+
+// analisarImportacao: 'importar' simbolos 'de' modulo ';'
+// Suporta: importar imprime de io;
+//
+//	importar soma, mul de math;
+func (p *Parser) analisarImportacao() (Expressao, error) {
+	tok := p.proximoToken() // consome 'importar'
+
+	// Parse símbolos a importar
+	var simbolos []string
+
+	// Primeiro símbolo é obrigatório
+	if p.tokenAtual().Type != lexer.IDENTIFIER {
+		return nil, fmt.Errorf("esperado identificador após 'importar' em %s", p.tokenAtual().Position)
+	}
+	simbolos = append(simbolos, p.tokenAtual().Value)
+	p.proximoToken() // consome o identificador
+
+	// Símbolos adicionais separados por vírgula
+	for p.tokenAtual().Type == lexer.COMMA {
+		p.proximoToken() // consome vírgula
+		if p.tokenAtual().Type != lexer.IDENTIFIER {
+			return nil, fmt.Errorf("esperado identificador após ',' em %s", p.tokenAtual().Position)
+		}
+		simbolos = append(simbolos, p.tokenAtual().Value)
+		p.proximoToken() // consome identificador
+	}
+
+	// Espera 'de'
+	if p.tokenAtual().Type != lexer.DE {
+		return nil, fmt.Errorf("esperado 'de' após símbolos em %s", p.tokenAtual().Position)
+	}
+	p.proximoToken() // consome 'de'
+
+	// Nome do módulo/arquivo
+	if p.tokenAtual().Type != lexer.IDENTIFIER {
+		return nil, fmt.Errorf("esperado nome do módulo após 'de' em %s", p.tokenAtual().Position)
+	}
+	modulo := p.tokenAtual().Value
+	p.proximoToken() // consome módulo
+
+	return &Importacao{
+		Simbolos: simbolos,
+		Modulo:   modulo,
+		Token:    tok,
+	}, nil
 }
 
 // analisarExpressao implementa precedência de operadores usando o algoritmo Pratt
@@ -245,10 +297,63 @@ func (p *Parser) analisarPrefixo() (Expressao, error) {
 		}
 		return &Constante{Valor: valor, Token: token}, nil
 
+	case lexer.FLOAT:
+		valor, err := strconv.ParseFloat(token.Value, 64)
+		if err != nil {
+			return nil, utils.NovoErro(
+				"erro ao converter número decimal",
+				token.Position.Line,
+				token.Position.Column,
+				err.Error(),
+			)
+		}
+		return &LiteralDecimal{Valor: valor, Token: token}, nil
+
+	case lexer.STRING:
+		// Remove as aspas do início e fim
+		valor := token.Value[1 : len(token.Value)-1]
+		return &LiteralTexto{Valor: valor, Token: token}, nil
+
 	case lexer.VERDADEIRO:
 		return &Booleano{Valor: true, Token: token}, nil
 	case lexer.FALSO:
 		return &Booleano{Valor: false, Token: token}, nil
+
+	case lexer.MINUS:
+		// Operador unário negativo
+		proximo := p.proximoToken()
+		switch proximo.Type {
+		case lexer.NUMBER:
+			valor, err := strconv.Atoi(proximo.Value)
+			if err != nil {
+				return nil, utils.NovoErro(
+					"erro ao converter número negativo",
+					proximo.Position.Line,
+					proximo.Position.Column,
+					err.Error(),
+				)
+			}
+			return &Constante{Valor: -valor, Token: token}, nil
+		case lexer.FLOAT:
+			valor, err := strconv.ParseFloat(proximo.Value, 64)
+			if err != nil {
+				return nil, utils.NovoErro(
+					"erro ao converter número decimal negativo",
+					proximo.Position.Line,
+					proximo.Position.Column,
+					err.Error(),
+				)
+			}
+			return &LiteralDecimal{Valor: -valor, Token: token}, nil
+		default:
+			// Se não for número, retorna erro
+			return nil, utils.NovoErro(
+				"operador negativo deve ser seguido de número",
+				proximo.Position.Line,
+				proximo.Position.Column,
+				fmt.Sprintf("encontrado %s", proximo.Type.String()),
+			)
+		}
 
 	case lexer.IDENTIFIER:
 		// Pode ser variável ou início de chamada de função do usuário

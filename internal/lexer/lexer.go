@@ -31,29 +31,31 @@ func NovoLexer(entrada string) *Lexer {
 // inicializarPadroes inicializa os padrões regex para cada tipo de token
 func (l *Lexer) inicializarPadroes() {
 	l.padroes = map[TokenType]*regexp.Regexp{
-		NUMBER:        regexp.MustCompile(`^\d+`),                  // Números: 123, 456
-		PLUS:          regexp.MustCompile(`^\+`),                   // Adição: +
-		MINUS:         regexp.MustCompile(`^-`),                    // Subtraço: -
-		MULTIPLY:      regexp.MustCompile(`^\*`),                   // Multiplicação: *
-		POWER:         regexp.MustCompile(`^\*\*`),                 // Potência: **
-		DIVIDE:        regexp.MustCompile(`^/`),                    // Divisão
-		LPAREN:        regexp.MustCompile(`^\(`),                   // Parêntese esquerdo: (
-		RPAREN:        regexp.MustCompile(`^\)`),                   // Parêntese direito: )
-		ASSIGN:        regexp.MustCompile(`^~>`),                   // Simbolo para alocar variavel ~>
-		IDENTIFIER:    regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*`), // Palavras permitidas para nomear variaveis
-		COMMA:         regexp.MustCompile(`^,`),                    // Vírgula: ,
-		SEMICOLON:     regexp.MustCompile(`^;`),                    // Ponto e vírgula: ;
-		COLON:         regexp.MustCompile(`^:`),                    // Dois pontos: :
-		WHITESPACE:    regexp.MustCompile(`^\s+`),                  // Espaços em branco
-		COMMENT:       regexp.MustCompile(`^//.*`),                 // Comentarios //
-		LBRACE:        regexp.MustCompile(`^\{`),                   // Chave esquerda: {
-		RBRACE:        regexp.MustCompile(`^\}`),                   // Chave direita: }
-		EQUAL:         regexp.MustCompile(`^==`),                   // Operador de igualdade: ==
-		NOT_EQUAL:     regexp.MustCompile(`^!=`),                   // Operador de diferença: !=
-		LESS_EQUAL:    regexp.MustCompile(`^<=`),                   // Operador menor ou igual: <=
-		GREATER_EQUAL: regexp.MustCompile(`^>=`),                   // Operador maior ou igual: >=
-		LESS:          regexp.MustCompile(`^<`),                    // Operador menor que: <
-		GREATER:       regexp.MustCompile(`^>`),                    // Operador maior que: >
+		NUMBER:        regexp.MustCompile(`^\d+`),                    // Números inteiros: 123, 456
+		FLOAT:         regexp.MustCompile(`^\d+\.\d+`),               // Números decimais: 123.45, 0.5
+		STRING:        regexp.MustCompile(`^"[^"]*"`),                // Strings: "texto", "olá mundo"
+		PLUS:          regexp.MustCompile(`^\+`),                     // Adição: +
+		MINUS:         regexp.MustCompile(`^-`),                      // Subtraço: -
+		MULTIPLY:      regexp.MustCompile(`^\*`),                     // Multiplicação: *
+		POWER:         regexp.MustCompile(`^\*\*`),                   // Potência: **
+		DIVIDE:        regexp.MustCompile(`^/`),                      // Divisão
+		LPAREN:        regexp.MustCompile(`^\(`),                     // Parêntese esquerdo: (
+		RPAREN:        regexp.MustCompile(`^\)`),                     // Parêntese direito: )
+		ASSIGN:        regexp.MustCompile(`^~>`),                     // Simbolo para alocar variavel ~>
+		IDENTIFIER:    regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*`), // Palavras permitidas para nomear variaveis (com underscore)
+		COMMA:         regexp.MustCompile(`^,`),                      // Vírgula: ,
+		SEMICOLON:     regexp.MustCompile(`^;`),                      // Ponto e vírgula: ;
+		COLON:         regexp.MustCompile(`^:`),                      // Dois pontos: :
+		WHITESPACE:    regexp.MustCompile(`^\s+`),                    // Espaços em branco
+		COMMENT:       regexp.MustCompile(`^//.*`),                   // Comentarios //
+		LBRACE:        regexp.MustCompile(`^\{`),                     // Chave esquerda: {
+		RBRACE:        regexp.MustCompile(`^\}`),                     // Chave direita: }
+		EQUAL:         regexp.MustCompile(`^==`),                     // Operador de igualdade: ==
+		NOT_EQUAL:     regexp.MustCompile(`^!=`),                     // Operador de diferença: !=
+		LESS_EQUAL:    regexp.MustCompile(`^<=`),                     // Operador menor ou igual: <=
+		GREATER_EQUAL: regexp.MustCompile(`^>=`),                     // Operador maior ou igual: >=
+		LESS:          regexp.MustCompile(`^<`),                      // Operador menor que: <
+		GREATER:       regexp.MustCompile(`^>`),                      // Operador maior que: >
 	}
 }
 
@@ -89,8 +91,8 @@ func (l *Lexer) proximoToken() (Token, error) {
 	posicaoAtual := l.obterPosicaoAtual()
 	restante := l.entrada[l.posicao:]
 
-	// Tenta fazer match com cada padrão (ordem importa para ** vs *, >= vs >, <= vs <, == vs =, != vs !)
-	tiposToken := []TokenType{COMMENT, ASSIGN, IDENTIFIER, POWER, GREATER_EQUAL, LESS_EQUAL, NOT_EQUAL, EQUAL, NUMBER, PLUS, MINUS, DIVIDE, MULTIPLY, LPAREN, RPAREN, LBRACE, RBRACE, LESS, GREATER, COMMA, SEMICOLON, COLON, WHITESPACE}
+	// Tenta fazer match com cada padrão (ordem importa para ** vs *, >= vs >, <= vs <, == vs =, != vs !, FLOAT vs NUMBER)
+	tiposToken := []TokenType{COMMENT, ASSIGN, IDENTIFIER, POWER, GREATER_EQUAL, LESS_EQUAL, NOT_EQUAL, EQUAL, STRING, FLOAT, NUMBER, PLUS, MINUS, DIVIDE, MULTIPLY, LPAREN, RPAREN, LBRACE, RBRACE, LESS, GREATER, COMMA, SEMICOLON, COLON, WHITESPACE}
 
 	for _, tipoToken := range tiposToken {
 		if match := l.padroes[tipoToken].FindString(restante); match != "" {
@@ -133,6 +135,8 @@ func (l *Lexer) ehPalavraChave(nome string) bool {
 		"falso":      true,
 		"para":       true,
 		"enquanto":   true,
+		"importar":   true,
+		"de":         true,
 	}
 	return palavrasChave[nome]
 }
@@ -156,6 +160,10 @@ func (l *Lexer) obterTipoPalavraChave(nome string) TokenType {
 		return VERDADEIRO
 	case "falso":
 		return FALSO
+	case "importar":
+		return IMPORTAR
+	case "de":
+		return DE
 	default:
 		return IDENTIFIER
 	}

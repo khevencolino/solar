@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/khevencolino/Solar/internal/parser"
+	"github.com/khevencolino/Solar/internal/prelude"
 )
 
 // TypeChecker realiza inferência e checagem real de tipos
@@ -12,6 +13,7 @@ type TypeChecker struct {
 	funcs        map[string]*funcSig
 	funcRetStack []parser.Tipo
 	builtins     map[string]builtinSig
+	prelude      *prelude.Prelude
 }
 
 type funcSig struct {
@@ -34,12 +36,10 @@ func NovoTypeChecker() *TypeChecker {
 		scopes:       []map[string]parser.Tipo{make(map[string]parser.Tipo)},
 		funcs:        make(map[string]*funcSig),
 		funcRetStack: []parser.Tipo{},
+		prelude:      prelude.NewPrelude(),
 		builtins: map[string]builtinSig{
-			"imprime": {params: []parser.Tipo{parser.TipoInteiro}, varargs: true, minArgs: 1, ret: parser.TipoInteiro, accept: func(tp parser.Tipo) bool {
-				return tp == parser.TipoInteiro || tp == parser.TipoBooleano
-			}},
+			// Mantém apenas builtins que não são do prelude
 			"soma": {params: []parser.Tipo{parser.TipoInteiro}, varargs: true, minArgs: 2, ret: parser.TipoInteiro},
-			"abs":  {params: []parser.Tipo{parser.TipoInteiro}, varargs: false, minArgs: 1, ret: parser.TipoInteiro},
 		},
 	}
 	return tc
@@ -155,6 +155,19 @@ func (t *TypeChecker) inferirExpr(e parser.Expressao) (parser.Tipo, error) {
 		}
 
 	case *parser.ChamadaFuncao:
+		// Função do prelude (sempre disponível)?
+		if t.prelude.EhFuncaoPrelude(n.Nome) {
+			fn, _ := t.prelude.ObterFuncaoPrelude(n.Nome)
+			if len(n.Argumentos) < fn.MinArgs {
+				return 0, fmt.Errorf("função '%s' requer pelo menos %d argumento(s)", n.Nome, fn.MinArgs)
+			}
+			if fn.MaxArgs != -1 && len(n.Argumentos) > fn.MaxArgs {
+				return 0, fmt.Errorf("função '%s' aceita no máximo %d argumento(s)", n.Nome, fn.MaxArgs)
+			}
+			// Para funções do prelude, assumimos que retornam inteiro
+			return parser.TipoInteiro, nil
+		}
+
 		// Função do usuário?
 		if sig, ok := t.funcs[n.Nome]; ok {
 			if len(n.Argumentos) != len(sig.params) {
@@ -275,6 +288,11 @@ func (t *TypeChecker) inferirExpr(e parser.Expressao) (parser.Tipo, error) {
 
 	case *parser.FuncaoDeclaracao:
 		return t.checkFuncDecl(n)
+
+	case *parser.Importacao:
+		// Imports são processados antes da checagem de tipos
+		// Aqui só retornamos um tipo válido para não causar erro
+		return parser.TipoVazio, nil
 
 	case *parser.Retorno:
 		if len(t.funcRetStack) == 0 {

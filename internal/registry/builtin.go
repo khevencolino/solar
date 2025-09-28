@@ -55,23 +55,16 @@ func NovoRegistroBuiltin() *RegistroBuiltin {
 
 // registrarFuncoesBasicas registra as funções builtin básicas
 func (r *RegistroBuiltin) registrarFuncoesBasicas() {
-	// Função imprime
+	// Função imprime - para saída de dados
 	r.RegistrarFuncao("imprime", AssinaturaFuncao{
 		Nome:           "imprime",
 		MinArgumentos:  1,
 		MaxArgumentos:  -1, // ilimitado
-		TiposArgumento: []TipoArgumento{TIPO_INTEIRO},
+		TiposArgumento: []TipoArgumento{TIPO_QUALQUER},
 		TipoFuncao:     FUNCAO_IMPRIME,
-		Descricao:      "Imprime um ou mais valores separados por espaço",
+		Descricao:      "Imprime valores na saída padrão",
 	}, func(argumentos []interface{}) (interface{}, error) {
-		for i, arg := range argumentos {
-			if i > 0 {
-				fmt.Print(" ")
-			}
-			fmt.Print(arg)
-		}
-		fmt.Println()
-		return 0, nil
+		return nil, nil
 	})
 
 	// Função soma (exemplo de como adicionar novas funções)
@@ -92,23 +85,6 @@ func (r *RegistroBuiltin) registrarFuncoesBasicas() {
 		return resultado, nil
 	})
 
-	// Função abs (valor absoluto)
-	r.RegistrarFuncao("abs", AssinaturaFuncao{
-		Nome:           "abs",
-		MinArgumentos:  1,
-		MaxArgumentos:  1,
-		TiposArgumento: []TipoArgumento{TIPO_INTEIRO},
-		TipoFuncao:     FUNCAO_PURA,
-		Descricao:      "Retorna o valor absoluto de um número",
-	}, func(argumentos []interface{}) (interface{}, error) {
-		if num, ok := argumentos[0].(int); ok {
-			if num < 0 {
-				return -num, nil
-			}
-			return num, nil
-		}
-		return 0, fmt.Errorf("argumento deve ser um número")
-	})
 }
 
 // RegistrarFuncao adiciona uma nova função builtin ao registro

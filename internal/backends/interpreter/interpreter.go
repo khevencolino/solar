@@ -7,6 +7,7 @@ import (
 	"github.com/khevencolino/Solar/internal/debug"
 	"github.com/khevencolino/Solar/internal/lexer"
 	"github.com/khevencolino/Solar/internal/parser"
+	"github.com/khevencolino/Solar/internal/prelude"
 	"github.com/khevencolino/Solar/internal/registry"
 	"github.com/khevencolino/Solar/internal/utils"
 )
@@ -14,12 +15,14 @@ import (
 type InterpreterBackend struct {
 	variaveis map[string]int
 	funcoes   map[string]*parser.FuncaoDeclaracao
+	prelude   *prelude.Prelude
 }
 
 func NewInterpreterBackend() *InterpreterBackend {
 	return &InterpreterBackend{
 		variaveis: make(map[string]int),
 		funcoes:   make(map[string]*parser.FuncaoDeclaracao),
+		prelude:   prelude.NewPrelude(),
 	}
 }
 
@@ -105,10 +108,15 @@ func (i *InterpreterBackend) Constante(constante *parser.Constante) interface{} 
 }
 
 func (i *InterpreterBackend) Booleano(b *parser.Booleano) interface{} {
-	if b.Valor {
-		return 1
-	}
-	return 0
+	return b.Valor
+}
+
+func (i *InterpreterBackend) LiteralTexto(literal *parser.LiteralTexto) interface{} {
+	return literal.Valor
+}
+
+func (i *InterpreterBackend) LiteralDecimal(literal *parser.LiteralDecimal) interface{} {
+	return literal.Valor
 }
 
 func (i *InterpreterBackend) Variavel(variavel *parser.Variavel) interface{} {
@@ -216,7 +224,21 @@ func (i *InterpreterBackend) OperacaoBinaria(operacao *parser.OperacaoBinaria) i
 
 // ChamadaFuncao implementa chamadas de função builtin
 func (i *InterpreterBackend) ChamadaFuncao(chamada *parser.ChamadaFuncao) interface{} {
-	// Primeiro verifica se é uma função definida pelo usuário
+	// 1. Verifica prelude primeiro (funções sempre disponíveis)
+	if i.prelude.EhFuncaoPrelude(chamada.Nome) {
+		// Avalia argumentos
+		argumentos := make([]interface{}, len(chamada.Argumentos))
+		for idx, argumento := range chamada.Argumentos {
+			valorInterface := argumento.Aceitar(i)
+			if erro, ok := valorInterface.(error); ok {
+				return erro
+			}
+			argumentos[idx] = valorInterface
+		}
+		return i.prelude.ExecutarFuncaoPrelude(chamada.Nome, argumentos)
+	}
+
+	// 2. Verifica se é uma função definida pelo usuário
 	if fn, ok := i.funcoes[chamada.Nome]; ok {
 		return i.executarFuncaoUsuario(fn, chamada)
 	}
@@ -438,6 +460,13 @@ func (i *InterpreterBackend) Retorno(ret *parser.Retorno) interface{} {
 		return erro
 	}
 	return retornoValor{valor: val.(int)}
+}
+
+// Suporte a importação (processadas antes da interpretação)
+func (i *InterpreterBackend) Importacao(imp *parser.Importacao) interface{} {
+	// Imports já foram processados pelo compilador antes de chegar aqui
+	// Não precisamos fazer nada específico no interpreter
+	return 0
 }
 
 // Estrutura para propagar retorno através do visitor

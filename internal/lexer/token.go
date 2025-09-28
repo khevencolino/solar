@@ -7,7 +7,9 @@ type TokenType int
 
 const (
 	// Tipos de tokens
-	NUMBER     TokenType = iota // Números
+	NUMBER     TokenType = iota // Números inteiros
+	FLOAT                       // Números decimais
+	STRING                      // Strings (texto entre aspas)
 	PLUS                        // Operador de adição (+)
 	MINUS                       // Operador de subtração (-)
 	MULTIPLY                    // Operador de multiplicação (*)
@@ -45,6 +47,9 @@ const (
 	// Loops
 	PARA     // for
 	ENQUANTO // while
+	// Imports
+	IMPORTAR // importar
+	DE       // de
 )
 
 // String retorna uma representação em string do tipo de token
@@ -52,6 +57,10 @@ func (t TokenType) String() string {
 	switch t {
 	case NUMBER:
 		return "NUMBER"
+	case FLOAT:
+		return "FLOAT"
+	case STRING:
+		return "STRING"
 	case PLUS:
 		return "PLUS"
 	case MINUS:
@@ -118,6 +127,10 @@ func (t TokenType) String() string {
 		return "PARA"
 	case ENQUANTO:
 		return "ENQUANTO"
+	case IMPORTAR:
+		return "IMPORTAR"
+	case DE:
+		return "DE"
 	default:
 		return "UNKNOWN"
 	}

@@ -25,6 +25,7 @@ type LLVMBackend struct {
 	varStack  []map[string]value.Value
 	userFuncs map[string]*ir.Func
 	tmpCount  int
+	strCount  int
 }
 
 func NewLLVMBackend() *LLVMBackend {
@@ -33,6 +34,7 @@ func NewLLVMBackend() *LLVMBackend {
 		varStack:  nil,
 		userFuncs: make(map[string]*ir.Func),
 		tmpCount:  0,
+		strCount:  0,
 	}
 }
 
@@ -57,6 +59,13 @@ func (l *LLVMBackend) Compile(statements []parser.Expressao) error {
 			if fn.Nome == "principal" {
 				funcaoPrincipal = fn
 			}
+		}
+	}
+
+	// Segunda passada: definir corpos das funções do usuário
+	for _, st := range statements {
+		if fn, ok := st.(*parser.FuncaoDeclaracao); ok {
+			l.definirFuncaoUsuario(fn)
 		}
 	}
 
@@ -116,6 +125,7 @@ func (l *LLVMBackend) processarExpressaoValue(expr parser.Expressao) value.Value
 
 // Implementação da interface visitor
 func (l *LLVMBackend) Constante(constante *parser.Constante) interface{} {
+	// Suporte completo a números inteiros, incluindo negativos
 	return constant.NewInt(types.I64, int64(constante.Valor))
 }
 
@@ -124,6 +134,24 @@ func (l *LLVMBackend) Booleano(b *parser.Booleano) interface{} {
 		return constant.NewInt(types.I64, 1)
 	}
 	return constant.NewInt(types.I64, 0)
+}
+
+func (l *LLVMBackend) LiteralTexto(literal *parser.LiteralTexto) interface{} {
+	// Implementa suporte completo a strings criando uma string global
+	strValue := literal.Valor
+
+	// Cria uma variável global para a string com terminador nulo
+	globalStr := l.module.NewGlobalDef(l.getNextStringName(), constant.NewCharArrayFromString(strValue+"\x00"))
+	globalStr.Immutable = true
+
+	// Retorna um ponteiro para o primeiro caractere da string
+	return l.block.NewGetElementPtr(types.NewArray(uint64(len(strValue)+1), types.I8), globalStr,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+}
+
+func (l *LLVMBackend) LiteralDecimal(literal *parser.LiteralDecimal) interface{} {
+	// Implementa suporte completo a ponto flutuante usando double (64-bit)
+	return constant.NewFloat(types.Double, literal.Valor)
 }
 
 func (l *LLVMBackend) Variavel(variavel *parser.Variavel) interface{} {
@@ -250,23 +278,9 @@ func (l *LLVMBackend) processarFuncao(fn *parser.ChamadaFuncao) value.Value {
 	}
 	// Verifica se é função builtin no registry
 	if assinatura, ok := registry.RegistroGlobal.ObterAssinatura(fn.Nome); ok {
-		// Avalia argumentos
-		var args []interface{}
-		for _, arg := range fn.Argumentos {
-			valor := l.processarExpressao(arg)
-			// Converte value.Value para interface{} extraindo o valor
-			if constVal, ok := valor.(*constant.Int); ok {
-				args = append(args, int(constVal.X.Int64()))
-			} else {
-				// Para valores não constantes, não podemos processar em tempo de compilação
-				fmt.Printf("Aviso: função builtin '%s' com argumentos não constantes\n", fn.Nome)
-				return constant.NewInt(types.I64, 0)
-			}
-		}
-
 		switch assinatura.TipoFuncao {
 		case registry.FUNCAO_IMPRIME:
-			// Implementa função imprime
+			// Implementa função imprime diretamente
 			for _, arg := range fn.Argumentos {
 				valor := l.processarExpressao(arg)
 				l.imprimirValor(valor)
@@ -274,6 +288,20 @@ func (l *LLVMBackend) processarFuncao(fn *parser.ChamadaFuncao) value.Value {
 			return constant.NewInt(types.I64, 0)
 
 		case registry.FUNCAO_PURA:
+			// Para funções puras, tenta extrair valores constantes
+			var args []interface{}
+			for _, arg := range fn.Argumentos {
+				valor := l.processarExpressao(arg)
+				// Converte value.Value para interface{} extraindo o valor
+				if constVal, ok := valor.(*constant.Int); ok {
+					args = append(args, int(constVal.X.Int64()))
+				} else {
+					// Para valores não constantes, não podemos processar em tempo de compilação
+					fmt.Printf("Aviso: função builtin '%s' com argumentos não constantes\n", fn.Nome)
+					return constant.NewInt(types.I64, 0)
+				}
+			}
+
 			// Executa função pura e retorna resultado como constante
 			resultado, err := registry.RegistroGlobal.ExecutarFuncao(fn.Nome, args)
 			if err != nil {
@@ -289,12 +317,27 @@ func (l *LLVMBackend) processarFuncao(fn *parser.ChamadaFuncao) value.Value {
 }
 
 func (l *LLVMBackend) imprimirValor(valor value.Value) {
-	// String format para printf
-	formatStr := "%ld\n"
+	var formatStr string
+	var printValue value.Value
 
-	// Converte para i64 se necessário
-	printValue := valor
-	if valor.Type() != types.I64 {
+	// Determina o formato baseado no tipo do valor
+	valorType := valor.Type()
+	switch {
+	case valorType == types.Double:
+		// Números decimais (double)
+		formatStr = "%g\n"
+		printValue = valor
+	case valorType.Equal(types.NewPointer(types.I8)):
+		// Strings (ponteiro para char)
+		formatStr = "%s\n"
+		printValue = valor
+	case valorType == types.I64:
+		// Inteiros (incluindo booleanos convertidos)
+		formatStr = "%ld\n"
+		printValue = valor
+	default:
+		// Conversão padrão para inteiro
+		formatStr = "%ld\n"
 		printValue = l.block.NewSExt(valor, types.I64)
 	}
 
@@ -570,6 +613,12 @@ func (l *LLVMBackend) Retorno(ret *parser.Retorno) interface{} {
 	return constant.NewInt(types.I64, 0)
 }
 
+// Suporte a importação
+func (l *LLVMBackend) Importacao(imp *parser.Importacao) interface{} {
+	// Imports são processados antes da geração de código
+	return nil
+}
+
 // Implementa potência usando loop iterativo
 func (l *LLVMBackend) implementarPotencia(base, exp value.Value) value.Value {
 	// Cria blocos para o loop de potência
@@ -641,4 +690,11 @@ func (l *LLVMBackend) compilarParaExecutavel(arquivoLLVM string) error {
 	debug.Printf("Executável gerado em: %s\n", executavel)
 	debug.Printf("Para executar: ./%s\n", executavel)
 	return nil
+}
+
+// Gera um nome único para strings globais
+func (l *LLVMBackend) getNextStringName() string {
+	name := fmt.Sprintf("str_%d", l.strCount)
+	l.strCount++
+	return name
 }
