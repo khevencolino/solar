@@ -248,12 +248,8 @@ func (t *TypeChecker) inferirExpr(e parser.Expressao) (parser.Tipo, error) {
 		return 0, fmt.Errorf("função '%s' não encontrada", n.Nome)
 
 	case *parser.ComandoSe:
-		ct, err := t.inferirExpr(n.Condicao)
-		if err != nil {
+		if err := t.checkCondicao("se", n.Condicao); err != nil {
 			return 0, err
-		}
-		if !(t.mesmoTipo(ct, parser.TipoBooleano) || t.mesmoTipo(ct, parser.TipoInteiro)) {
-			return 0, fmt.Errorf("condição do 'se' deve ser booleano, recebeu %s", ct.String())
 		}
 		if _, err := t.inferirBloco(n.BlocoSe); err != nil {
 			return 0, err
@@ -266,12 +262,8 @@ func (t *TypeChecker) inferirExpr(e parser.Expressao) (parser.Tipo, error) {
 		return parser.TipoVazio, nil
 
 	case *parser.ComandoEnquanto:
-		ct, err := t.inferirExpr(n.Condicao)
-		if err != nil {
+		if err := t.checkCondicao("enquanto", n.Condicao); err != nil {
 			return 0, err
-		}
-		if !(t.mesmoTipo(ct, parser.TipoBooleano) || t.mesmoTipo(ct, parser.TipoInteiro)) {
-			return 0, fmt.Errorf("condição do 'enquanto' deve ser booleano, recebeu %s", ct.String())
 		}
 		if _, err := t.inferirBloco(n.Corpo); err != nil {
 			return 0, err
@@ -287,12 +279,8 @@ func (t *TypeChecker) inferirExpr(e parser.Expressao) (parser.Tipo, error) {
 			}
 		}
 		if n.Condicao != nil {
-			ct, err := t.inferirExpr(n.Condicao)
-			if err != nil {
+			if err := t.checkCondicao("para", n.Condicao); err != nil {
 				return 0, err
-			}
-			if !(t.mesmoTipo(ct, parser.TipoBooleano) || t.mesmoTipo(ct, parser.TipoInteiro)) {
-				return 0, fmt.Errorf("condição do 'para' deve ser booleano, recebeu %s", ct.String())
 			}
 		}
 		if _, err := t.inferirBloco(n.Corpo); err != nil {
@@ -313,7 +301,6 @@ func (t *TypeChecker) inferirExpr(e parser.Expressao) (parser.Tipo, error) {
 
 	case *parser.Importacao:
 		// Imports são processados antes da checagem de tipos
-		// Aqui só retornamos um tipo válido para não causar erro
 		return parser.TipoVazio, nil
 
 	case *parser.Retorno:
@@ -339,6 +326,18 @@ func (t *TypeChecker) inferirExpr(e parser.Expressao) (parser.Tipo, error) {
 	default:
 		return 0, fmt.Errorf("nó do tipo %T não suportado na checagem de tipos", e)
 	}
+}
+
+// checkCondicao valida que a expressão da condição de estruturas de controle seja booleano
+func (t *TypeChecker) checkCondicao(contexto string, expr parser.Expressao) error {
+	ct, err := t.inferirExpr(expr)
+	if err != nil {
+		return err
+	}
+	if !(t.mesmoTipo(ct, parser.TipoBooleano) || t.mesmoTipo(ct, parser.TipoInteiro)) {
+		return fmt.Errorf("condição do '%s' deve ser booleano, recebeu %s", contexto, ct.String())
+	}
+	return nil
 }
 
 func (t *TypeChecker) inferirBloco(b *parser.Bloco) (parser.Tipo, error) {

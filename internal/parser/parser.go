@@ -115,36 +115,29 @@ func (p *Parser) analisarStatement() (Expressao, error) {
 		return p.analisarImportacao()
 	}
 
-	// Verifica se é uma atribuição (com ou sem anotação de tipo)
+	// Verifica se é início de IDENTIFIER que pode ser atribuição, chamada de função ou simples variável
 	if token.Type == lexer.IDENTIFIER {
 		p.proximoToken() // consome o identificador
 
-		// Suporta anotação de tipo: IDENT ':' tipo '~>' expr
-		var tipoAnnot *Tipo
-		if p.tokenAtual().Type == lexer.COLON {
-			p.proximoToken()
-			tTok := p.proximoToken()
-			if tTok.Type != lexer.IDENTIFIER {
-				return nil, utils.NovoErro("tipo inválido", tTok.Position.Line, tTok.Position.Column, "esperado identificador de tipo")
-			}
-			tp, err := p.parseTipoPorNome(tTok.Value)
-			if err != nil {
-				return nil, utils.NovoErro("tipo inválido", tTok.Position.Line, tTok.Position.Column, err.Error())
-			}
-			tipoAnnot = &tp
+		// Tenta ler anotação de tipo opcional imediatamente após o identificador
+		tipoAnnot, err := p.parseTipoAnnotationIfPresent()
+		if err != nil {
+			return nil, err
 		}
 
-		if p.tokenAtual().Type == lexer.ASSIGN {
-			p.proximoToken() // consome o operador de atribuição
+		switch p.tokenAtual().Type {
+		case lexer.ASSIGN:
+			p.proximoToken() // consome '~>'
 			valor, err := p.analisarExpressao(PRECEDENCIA_NENHUMA)
 			if err != nil {
 				return nil, err
 			}
 			return &Atribuicao{Nome: token.Value, Valor: valor, Token: token, TipoAnotado: tipoAnnot}, nil
-		} else if p.tokenAtual().Type == lexer.LPAREN {
+		case lexer.LPAREN:
+			// Chamada de função do usuário
 			return p.analisarChamadaFuncao(lexer.NovoToken(lexer.FUNCTION, token.Value, token.Position))
-		} else {
-			// Se não é atribuição nem chamada, volta um token e analisa como expressão
+		default:
+			// Não era atribuição nem chamada: retrocede e trata como expressão comum
 			p.posicaoAtual--
 			return p.analisarExpressao(PRECEDENCIA_NENHUMA)
 		}
@@ -747,32 +740,39 @@ func (p *Parser) analisarComandoPara() (Expressao, error) {
 // analisarAtribOuExpressao tenta analisar uma atribuição (com ou sem anotação de tipo) ou uma expressão
 func (p *Parser) analisarAtribOuExpressao() (Expressao, error) {
 	if p.tokenAtual().Type == lexer.IDENTIFIER {
-		// snapshot da posição
 		save := p.posicaoAtual
-		identTok := p.proximoToken() // consome o identificador
-		var tipoAnnot *Tipo
-		if p.tokenAtual().Type == lexer.COLON {
-			p.proximoToken()
-			tTok := p.proximoToken()
-			if tTok.Type != lexer.IDENTIFIER {
-				return nil, utils.NovoErro("tipo inválido", tTok.Position.Line, tTok.Position.Column, "esperado identificador de tipo")
-			}
-			tp, err := p.parseTipoPorNome(tTok.Value)
-			if err != nil {
-				return nil, utils.NovoErro("tipo inválido", tTok.Position.Line, tTok.Position.Column, err.Error())
-			}
-			tipoAnnot = &tp
+		identTok := p.proximoToken()
+		tipoAnnot, err := p.parseTipoAnnotationIfPresent()
+		if err != nil {
+			return nil, err
 		}
-		if p.tokenAtual().Type == lexer.ASSIGN {
-			p.proximoToken() // consome '~>'
+		if p.tokenAtual().Type == lexer.ASSIGN { // é atribuição
+			p.proximoToken()
 			valor, err := p.analisarExpressao(PRECEDENCIA_NENHUMA)
 			if err != nil {
 				return nil, err
 			}
 			return &Atribuicao{Nome: identTok.Value, Valor: valor, Token: identTok, TipoAnotado: tipoAnnot}, nil
 		}
-		// não era atribuição: restaura e analisa como expressão
+		// não era atribuição: restaura posição para tratar como expressão normal
 		p.posicaoAtual = save
 	}
 	return p.analisarExpressao(PRECEDENCIA_NENHUMA)
+}
+
+// verifica se há uma anotação de tipo logo após o token atual no formato ': Tipo'
+func (p *Parser) parseTipoAnnotationIfPresent() (*Tipo, error) {
+	if p.tokenAtual().Type != lexer.COLON { // Sem anotação de tipo
+		return nil, nil
+	}
+	p.proximoToken() // consome ':'
+	tTok := p.proximoToken()
+	if tTok.Type != lexer.IDENTIFIER {
+		return nil, utils.NovoErro("tipo inválido", tTok.Position.Line, tTok.Position.Column, "esperado identificador de tipo")
+	}
+	tp, err := p.parseTipoPorNome(tTok.Value)
+	if err != nil {
+		return nil, utils.NovoErro("tipo inválido", tTok.Position.Line, tTok.Position.Column, err.Error())
+	}
+	return &tp, nil
 }

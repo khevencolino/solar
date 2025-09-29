@@ -57,6 +57,36 @@ var padroesCompiledos = map[TokenType]*regexp.Regexp{
 	GREATER:       regexp.MustCompile(`^>`),                      // Operador maior que: >
 }
 
+// ordemTiposToken define a ordem de tentativa de matching dos tokens.
+// A ordem é importante para evitar conflitos (ex: FLOAT antes de NUMBER, POWER antes de MULTIPLY, >= antes de >, etc.)
+var ordemTiposToken = []TokenType{
+	COMMENT,
+	ASSIGN,
+	IDENTIFIER,
+	POWER,
+	GREATER_EQUAL,
+	LESS_EQUAL,
+	NOT_EQUAL,
+	EQUAL,
+	STRING,
+	FLOAT,
+	NUMBER,
+	PLUS,
+	MINUS,
+	DIVIDE,
+	MULTIPLY,
+	LPAREN,
+	RPAREN,
+	LBRACE,
+	RBRACE,
+	LESS,
+	GREATER,
+	COMMA,
+	SEMICOLON,
+	COLON,
+	WHITESPACE,
+}
+
 // inicializarPadroes atribui os padrões pré-compilados
 func (l *Lexer) inicializarPadroes() {
 	l.padroes = padroesCompiledos
@@ -94,10 +124,8 @@ func (l *Lexer) proximoToken() (Token, error) {
 	posicaoAtual := l.obterPosicaoAtual()
 	restante := l.entrada[l.posicao:]
 
-	// Tenta fazer match com cada padrão (ordem importa para ** vs *, >= vs >, <= vs <, == vs =, != vs !, FLOAT vs NUMBER)
-	tiposToken := []TokenType{COMMENT, ASSIGN, IDENTIFIER, POWER, GREATER_EQUAL, LESS_EQUAL, NOT_EQUAL, EQUAL, STRING, FLOAT, NUMBER, PLUS, MINUS, DIVIDE, MULTIPLY, LPAREN, RPAREN, LBRACE, RBRACE, LESS, GREATER, COMMA, SEMICOLON, COLON, WHITESPACE}
-
-	for _, tipoToken := range tiposToken {
+	// Tenta fazer match com cada padrão respeitando a ordem definida globalmente
+	for _, tipoToken := range ordemTiposToken {
 		if match := l.padroes[tipoToken].FindString(restante); match != "" {
 			token := NovoToken(tipoToken, match, posicaoAtual)
 
@@ -115,11 +143,10 @@ func (l *Lexer) proximoToken() (Token, error) {
 		}
 	}
 
-	// Caractere inválido
+	// Caractere inválido: consome um byte e retorna erro
 	caractereInvalido := string(l.espiar())
 	l.avancar(1)
-	return NovoToken(INVALID, caractereInvalido, posicaoAtual),
-		fmt.Errorf("caractere inválido '%s' em %s", caractereInvalido, posicaoAtual)
+	return NovoToken(INVALID, caractereInvalido, posicaoAtual), fmt.Errorf("caractere inválido '%s' em %s", caractereInvalido, posicaoAtual)
 }
 
 // ehFuncaoBuiltin verifica se um identificador é uma função builtin

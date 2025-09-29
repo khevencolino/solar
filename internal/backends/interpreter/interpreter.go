@@ -152,80 +152,62 @@ func (i *InterpreterBackend) Atribuicao(atribuicao *parser.Atribuicao) interface
 }
 
 func (i *InterpreterBackend) OperacaoBinaria(operacao *parser.OperacaoBinaria) interface{} {
-	// Interpreta operando esquerdo
-	esquerdoInterface := operacao.OperandoEsquerdo.Aceitar(i)
-	if erro, ok := esquerdoInterface.(error); ok {
-		return erro
+	// Avalia operandos com helper
+	esqVal, err := i.evaluateOperand(operacao.OperandoEsquerdo)
+	if err != nil {
+		return err
 	}
-	esquerdo := esquerdoInterface.(int)
-
-	// Interpreta operando direito
-	direitoInterface := operacao.OperandoDireito.Aceitar(i)
-	if erro, ok := direitoInterface.(error); ok {
-		return erro
+	dirVal, err2 := i.evaluateOperand(operacao.OperandoDireito)
+	if err2 != nil {
+		return err2
 	}
-	direito := direitoInterface.(int)
 
-	// Executa operação
 	switch operacao.Operador {
 	case parser.ADICAO:
-		return esquerdo + direito
+		return esqVal + dirVal
 	case parser.SUBTRACAO:
-		return esquerdo - direito
+		return esqVal - dirVal
 	case parser.MULTIPLICACAO:
-		return esquerdo * direito
+		return esqVal * dirVal
 	case parser.DIVISAO:
-		if direito == 0 {
-			return utils.NovoErro(
-				"divisão por zero",
-				operacao.Token.Position.Line,
-				operacao.Token.Position.Column,
-				"",
-			)
+		if dirVal == 0 {
+			return utils.NovoErro("divisão por zero", operacao.Token.Position.Line, operacao.Token.Position.Column, "")
 		}
-		return esquerdo / direito
+		return esqVal / dirVal
 	case parser.POWER:
-		return int(math.Pow(float64(esquerdo), float64(direito)))
-
-	// Operações de comparação
+		return int(math.Pow(float64(esqVal), float64(dirVal)))
 	case parser.IGUALDADE:
-		if esquerdo == direito {
-			return 1
-		}
-		return 0
+		return i.compareInts(esqVal == dirVal)
 	case parser.DIFERENCA:
-		if esquerdo != direito {
-			return 1
-		}
-		return 0
+		return i.compareInts(esqVal != dirVal)
 	case parser.MENOR_QUE:
-		if esquerdo < direito {
-			return 1
-		}
-		return 0
+		return i.compareInts(esqVal < dirVal)
 	case parser.MAIOR_QUE:
-		if esquerdo > direito {
-			return 1
-		}
-		return 0
+		return i.compareInts(esqVal > dirVal)
 	case parser.MENOR_IGUAL:
-		if esquerdo <= direito {
-			return 1
-		}
-		return 0
+		return i.compareInts(esqVal <= dirVal)
 	case parser.MAIOR_IGUAL:
-		if esquerdo >= direito {
-			return 1
-		}
-		return 0
+		return i.compareInts(esqVal >= dirVal)
 	default:
-		return utils.NovoErro(
-			"operador desconhecido",
-			operacao.Token.Position.Line,
-			operacao.Token.Position.Column,
-			"",
-		)
+		return utils.NovoErro("operador desconhecido", operacao.Token.Position.Line, operacao.Token.Position.Column, "")
 	}
+}
+
+// evaluateOperand avalia uma expressão e garante retorno int (simplifiquei, talvez altero na prox)
+func (i *InterpreterBackend) evaluateOperand(expr parser.Expressao) (int, error) {
+	v := expr.Aceitar(i)
+	if erro, ok := v.(error); ok {
+		return 0, erro
+	}
+	return v.(int), nil
+}
+
+// compareInts converte bool para 1/0
+func (i *InterpreterBackend) compareInts(cond bool) int {
+	if cond {
+		return 1
+	}
+	return 0
 }
 
 // ChamadaFuncao implementa chamadas de função builtin
