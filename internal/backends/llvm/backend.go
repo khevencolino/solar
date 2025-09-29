@@ -627,30 +627,30 @@ func (l *LLVMBackend) implementarPotencia(base, exp value.Value) value.Value {
 
 // Tenta compilar o LLVM IR para um executável usando clang
 func (l *LLVMBackend) compilarParaExecutavel(arquivoLLVM string) error {
-	debug.Printf("Tentando compilar LLVM IR para executável...\n")
+	fmt.Printf("Tentando compilar LLVM IR para executável...\n")
 
-	// Cria diretório result se não existir
-	if err := os.MkdirAll("result", 0755); err != nil {
-		return fmt.Errorf("erro ao criar diretório result: %v", err)
+	// Cria diretório resultado se não existir
+	if err := os.MkdirAll("resultado", 0755); err != nil {
+		return fmt.Errorf("erro ao criar diretório resultado: %v", err)
 	}
 
 	// Tenta usar clang para compilar
-	executavel := "result/programa"
+	executavel := "resultado/programa"
 	cmd := exec.Command("clang", "-O2", "-o", executavel, arquivoLLVM)
 
 	if err := cmd.Run(); err != nil {
 		// Se clang não estiver disponível, tenta lli para interpretação
-		debug.Printf("clang não disponível, tentando lli...\n")
+		fmt.Printf("clang não disponível, tentando lli...\n")
 		cmdLli := exec.Command("lli", arquivoLLVM)
 		if err := cmdLli.Run(); err != nil {
 			return fmt.Errorf("nem clang nem lli estão disponíveis")
 		}
-		debug.Printf("Executado via lli (interpretador LLVM)\n")
+		fmt.Printf("Executado via lli (interpretador LLVM)\n")
 		return nil
 	}
 
-	debug.Printf("Executável gerado em: %s\n", executavel)
-	debug.Printf("Para executar: ./%s\n", executavel)
+	fmt.Printf("Executável gerado em: %s\n", executavel)
+	fmt.Printf("Para executar: ./%s\n", executavel)
 	return nil
 }
 
