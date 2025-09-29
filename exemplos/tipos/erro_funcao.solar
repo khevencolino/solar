@@ -3,4 +3,4 @@ definir f(a: Inteiro, b: Inteiro): Inteiro {
 }
 
 f(1, 2);
-f(1, Decimal);
+f(1, "Teste");

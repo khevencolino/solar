@@ -18,7 +18,7 @@ type TypeChecker struct {
 
 type funcSig struct {
 	name   string
-	params []parser.Tipo
+	params []parser.ParametroFuncao
 	ret    parser.Tipo
 }
 
@@ -50,7 +50,7 @@ func (t *TypeChecker) Check(stmts []parser.Expressao) error {
 	for _, s := range stmts {
 		if fn, ok := s.(*parser.FuncaoDeclaracao); ok {
 			sig := &funcSig{name: fn.Nome, ret: fn.Retorno}
-			sig.params = append(sig.params, fn.ParamTipos...)
+			sig.params = append(sig.params, fn.Parametros...)
 			t.funcs[fn.Nome] = sig
 		}
 	}
@@ -80,13 +80,21 @@ func (t *TypeChecker) getVar(nome string) (parser.Tipo, bool) {
 	return 0, false
 }
 
+// setVarLocal define uma variável no escopo atual (permite shadowing)
+func (t *TypeChecker) setVarLocal(nome string, tp parser.Tipo) {
+	t.scopes[len(t.scopes)-1][nome] = tp
+}
+
+// setVar define uma variável, procurando primeiro se já existe em escopos externos
 func (t *TypeChecker) setVar(nome string, tp parser.Tipo) {
+	// Para atribuições, procura em escopos externos primeiro
 	for i := len(t.scopes) - 1; i >= 0; i-- {
 		if _, ok := t.scopes[i][nome]; ok {
 			t.scopes[i][nome] = tp
 			return
 		}
 	}
+	// Se não existe, cria no escopo atual
 	t.scopes[len(t.scopes)-1][nome] = tp
 }
 
@@ -97,6 +105,10 @@ func (t *TypeChecker) inferirExpr(e parser.Expressao) (parser.Tipo, error) {
 		return parser.TipoInteiro, nil
 	case *parser.Booleano:
 		return parser.TipoBooleano, nil
+	case *parser.LiteralTexto:
+		return parser.TipoTexto, nil
+	case *parser.LiteralDecimal:
+		return parser.TipoDecimal, nil
 
 	case *parser.Variavel:
 		if tp, ok := t.getVar(n.Nome); ok {
@@ -111,14 +123,24 @@ func (t *TypeChecker) inferirExpr(e parser.Expressao) (parser.Tipo, error) {
 			return 0, err
 		}
 		if n.TipoAnotado != nil {
+			// Declaração com tipo explícito (permite shadowing)
 			if !t.mesmoTipo(*n.TipoAnotado, vtp) {
 				return 0, fmt.Errorf("atribuição incompatível: variável '%s' anotada como %s, valor é %s", n.Nome, n.TipoAnotado.String(), vtp.String())
 			}
-			t.setVar(n.Nome, *n.TipoAnotado)
+			t.setVarLocal(n.Nome, *n.TipoAnotado)
 			return *n.TipoAnotado, nil
 		}
-		// sem anotação: variável assume o tipo do valor
-		t.setVar(n.Nome, vtp)
+		// Sem anotação: pode ser reatribuição ou nova declaração
+		if existingType, exists := t.getVar(n.Nome); exists {
+			// Reatribuição - deve ser compatível com o tipo existente
+			if !t.mesmoTipo(existingType, vtp) {
+				return 0, fmt.Errorf("reatribuição incompatível: variável '%s' é %s, valor é %s", n.Nome, existingType.String(), vtp.String())
+			}
+			t.setVar(n.Nome, vtp)
+			return vtp, nil
+		}
+		// Nova declaração no escopo atual
+		t.setVarLocal(n.Nome, vtp)
 		return vtp, nil
 
 	case *parser.OperacaoBinaria:
@@ -178,8 +200,8 @@ func (t *TypeChecker) inferirExpr(e parser.Expressao) (parser.Tipo, error) {
 				if err != nil {
 					return 0, err
 				}
-				if !t.mesmoTipo(at, sig.params[i]) {
-					return 0, fmt.Errorf("argumento %d de '%s' incompatível: esperado %s, recebeu %s", i+1, sig.name, sig.params[i].String(), at.String())
+				if !t.mesmoTipo(at, sig.params[i].Tipo) {
+					return 0, fmt.Errorf("argumento %d de '%s' incompatível: esperado %s, recebeu %s", i+1, sig.name, sig.params[i].Tipo.String(), at.String())
 				}
 			}
 			return sig.ret, nil
@@ -315,7 +337,7 @@ func (t *TypeChecker) inferirExpr(e parser.Expressao) (parser.Tipo, error) {
 		return parser.TipoVazio, nil
 
 	default:
-		return 0, fmt.Errorf("nó não suportado na checagem de tipos")
+		return 0, fmt.Errorf("nó do tipo %T não suportado na checagem de tipos", e)
 	}
 }
 
@@ -338,8 +360,9 @@ func (t *TypeChecker) checkFuncDecl(fn *parser.FuncaoDeclaracao) (parser.Tipo, e
 	defer func() { t.funcRetStack = t.funcRetStack[:len(t.funcRetStack)-1] }()
 
 	t.pushScope()
-	for i, nome := range fn.Parametros {
-		t.setVar(nome, fn.ParamTipos[i])
+	// Adiciona os parâmetros ao escopo local da função
+	for _, param := range fn.Parametros {
+		t.setVarLocal(param.Nome, param.Tipo)
 	}
 	lastType, err := t.inferirBloco(fn.Corpo)
 	if err != nil {

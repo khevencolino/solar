@@ -306,12 +306,17 @@ func (t Tipo) String() string {
 	}
 }
 
+// ParametroFuncao representa um parâmetro de função com nome e tipo
+type ParametroFuncao struct {
+	Nome string
+	Tipo Tipo
+}
+
 // FuncaoDeclaracao representa a declaração de uma função do usuário
 type FuncaoDeclaracao struct {
 	Nome       string
-	Parametros []string
-	ParamTipos []Tipo // paralelo a Parametros (se vazio, assume Int)
-	Retorno    Tipo   // default Int
+	Parametros []ParametroFuncao // Parâmetros com nome e tipo explícito
+	Retorno    Tipo              // Tipo de retorno (default: TipoInteiro)
 	Corpo      *Bloco
 	Token      lexer.Token
 }
@@ -319,7 +324,14 @@ type FuncaoDeclaracao struct {
 func (f *FuncaoDeclaracao) Aceitar(node Node) any { return node.FuncaoDeclaracao(f) }
 
 func (f *FuncaoDeclaracao) String() string {
-	return fmt.Sprintf("definir %s(%v) %s", f.Nome, f.Parametros, f.Corpo.String())
+	params := ""
+	for i, param := range f.Parametros {
+		if i > 0 {
+			params += ", "
+		}
+		params += fmt.Sprintf("%s: %s", param.Nome, param.Tipo.String())
+	}
+	return fmt.Sprintf("definir %s(%s): %s %s", f.Nome, params, f.Retorno.String(), f.Corpo.String())
 }
 
 // Retorno representa um comando de retorno na árvore

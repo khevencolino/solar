@@ -104,7 +104,8 @@ func (v *VisualizadorArvore) criarArvoreRecursiva(expressao Expressao) *tree.Tre
 		// parâmetros
 		params := tree.NewTree(tree.NodeString("parametros"))
 		for _, p := range expr.Parametros {
-			params.AddChild(tree.NodeString(p))
+			paramStr := fmt.Sprintf("%s: %s", p.Nome, p.Tipo.String())
+			params.AddChild(tree.NodeString(paramStr))
 		}
 		v.adicionarSubarvore(arvore, params)
 		// corpo

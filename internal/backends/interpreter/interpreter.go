@@ -12,15 +12,21 @@ import (
 	"github.com/khevencolino/Solar/internal/utils"
 )
 
+// Valor representa um valor tipado no interpretador
+type Valor struct {
+	Tipo  parser.Tipo
+	Dados interface{}
+}
+
 type InterpreterBackend struct {
-	variaveis map[string]int
+	variaveis map[string]Valor
 	funcoes   map[string]*parser.FuncaoDeclaracao
 	prelude   *prelude.Prelude
 }
 
 func NewInterpreterBackend() *InterpreterBackend {
 	return &InterpreterBackend{
-		variaveis: make(map[string]int),
+		variaveis: make(map[string]Valor),
 		funcoes:   make(map[string]*parser.FuncaoDeclaracao),
 		prelude:   prelude.NewPrelude(),
 	}
@@ -129,7 +135,7 @@ func (i *InterpreterBackend) Variavel(variavel *parser.Variavel) interface{} {
 			"",
 		)
 	}
-	return valor
+	return valor.Dados
 }
 
 func (i *InterpreterBackend) Atribuicao(atribuicao *parser.Atribuicao) interface{} {
@@ -141,7 +147,7 @@ func (i *InterpreterBackend) Atribuicao(atribuicao *parser.Atribuicao) interface
 	valor := valorInterface.(int)
 
 	// Armazena na tabela de símbolos
-	i.variaveis[atribuicao.Nome] = valor
+	i.variaveis[atribuicao.Nome] = Valor{Tipo: parser.TipoInteiro, Dados: valor}
 	return valor
 }
 
@@ -486,7 +492,7 @@ func (i *InterpreterBackend) executarFuncaoUsuario(fn *parser.FuncaoDeclaracao, 
 
 	// Salva contexto de variáveis e cria escopo local
 	antigo := i.variaveis
-	local := make(map[string]int)
+	local := make(map[string]Valor)
 	i.variaveis = local
 
 	// Avalia e vincula parâmetros
@@ -496,7 +502,7 @@ func (i *InterpreterBackend) executarFuncaoUsuario(fn *parser.FuncaoDeclaracao, 
 			i.variaveis = antigo
 			return erro
 		}
-		local[param] = v.(int)
+		local[param.Nome] = Valor{Tipo: param.Tipo, Dados: v.(int)}
 	}
 
 	// Executa corpo

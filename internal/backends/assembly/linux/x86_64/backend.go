@@ -439,8 +439,8 @@ func (a *X86_64Backend) gerarFuncaoUsuario(nome string, fn *parser.FuncaoDeclara
 		if idx >= len(regs) {
 			break // mais de 6 parâmetros não são suportados
 		}
-		a.declararVariavel(p)
-		a.output.WriteString(fmt.Sprintf("    mov %s, %s(%%rip)\n", regs[idx], a.getVarName(p)))
+		a.declararVariavel(p.Nome)
+		a.output.WriteString(fmt.Sprintf("    mov %s, %s(%%rip)\n", regs[idx], a.getVarName(p.Nome)))
 	}
 	// Gerar corpo (usando as variáveis globais dos params)
 	fn.Corpo.Aceitar(a)

@@ -501,7 +501,7 @@ func (l *LLVMBackend) declararFuncaoUsuario(fn *parser.FuncaoDeclaracao) {
 	// TODO: tipos variados
 	params := make([]*ir.Param, len(fn.Parametros))
 	for i, p := range fn.Parametros {
-		params[i] = ir.NewParam(p, types.I64)
+		params[i] = ir.NewParam(p.Nome, types.I64)
 	}
 	f := l.module.NewFunc(fn.Nome, types.I64, params...)
 	l.userFuncs[fn.Nome] = f

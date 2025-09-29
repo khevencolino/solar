@@ -478,17 +478,21 @@ func (p *Parser) analisarDeclaracaoFuncao() (Expressao, error) {
 		return nil, err
 	}
 
-	var params []string
-	var paramTipos []Tipo
+	var params []ParametroFuncao
 	if p.tokenAtual().Type != lexer.RPAREN {
 		for {
 			idTok := p.proximoToken()
 			if idTok.Type != lexer.IDENTIFIER {
 				return nil, utils.NovoErro("parâmetro inválido", idTok.Position.Line, idTok.Position.Column, "esperado identificador de parâmetro")
 			}
-			params = append(params, idTok.Value)
+
+			paramNome := idTok.Value
+			paramTipo := TipoInteiro // tipo padrão
+
+			// Tipo opcional: nome: tipo (se não especificado, assume inteiro)
 			if p.tokenAtual().Type == lexer.COLON {
-				p.proximoToken()
+				p.proximoToken() // consumir ':'
+
 				tTok := p.proximoToken()
 				if tTok.Type != lexer.IDENTIFIER {
 					return nil, utils.NovoErro("tipo inválido", tTok.Position.Line, tTok.Position.Column, "esperado identificador de tipo")
@@ -497,10 +501,11 @@ func (p *Parser) analisarDeclaracaoFuncao() (Expressao, error) {
 				if err != nil {
 					return nil, utils.NovoErro("tipo inválido", tTok.Position.Line, tTok.Position.Column, err.Error())
 				}
-				paramTipos = append(paramTipos, tp)
-			} else {
-				paramTipos = append(paramTipos, TipoInteiro)
+				paramTipo = tp
 			}
+
+			params = append(params, ParametroFuncao{Nome: paramNome, Tipo: paramTipo})
+
 			if p.tokenAtual().Type == lexer.COMMA {
 				p.proximoToken()
 				continue
@@ -537,31 +542,21 @@ func (p *Parser) analisarDeclaracaoFuncao() (Expressao, error) {
 		return nil, err
 	}
 
-	return &FuncaoDeclaracao{Nome: nomeTok.Value, Parametros: params, ParamTipos: paramTipos, Retorno: retorno, Corpo: bloco, Token: tokDef}, nil
+	return &FuncaoDeclaracao{Nome: nomeTok.Value, Parametros: params, Retorno: retorno, Corpo: bloco, Token: tokDef}, nil
 }
 
 // parseTipoPorNome converte o nome do tipo em Tipo
 func (p *Parser) parseTipoPorNome(nome string) (Tipo, error) {
 	switch nome {
-	case "Inteiro":
+	case "inteiro", "Inteiro":
 		return TipoInteiro, nil
-	case "Decimal":
+	case "decimal", "Decimal":
 		return TipoDecimal, nil
-	case "Texto":
+	case "texto", "Texto":
 		return TipoTexto, nil
-	case "Vazio":
+	case "vazio", "Vazio":
 		return TipoVazio, nil
-	case "Booleano":
-		return TipoBooleano, nil
-	case "inteiro":
-		return TipoInteiro, nil
-	case "decimal":
-		return TipoDecimal, nil
-	case "texto":
-		return TipoTexto, nil
-	case "vazio":
-		return TipoVazio, nil
-	case "booleano":
+	case "booleano", "Booleano":
 		return TipoBooleano, nil
 	default:
 		return 0, fmt.Errorf("tipo desconhecido '%s' (suportado: inteiro, decimal, texto, vazio, booleano)", nome)

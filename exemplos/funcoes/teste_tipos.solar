@@ -1,0 +1,19 @@
+// Teste de diferentes tipos de parâmetros
+definir processaTexto(nome: texto, idade: inteiro): texto {
+  imprime("Processando:");
+  imprime(nome);
+  imprime(idade);
+  retornar nome;
+}
+
+definir calculaDecimal(x: decimal, y: decimal): decimal {
+  resultado ~> x * y;
+  imprime(resultado);
+  retornar resultado;
+}
+
+definir principal(): inteiro {
+  processaTexto("João", 25);
+  calculaDecimal(3.14, 2.0);
+  retornar 0;
+}
