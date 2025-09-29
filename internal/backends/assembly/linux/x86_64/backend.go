@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"unsafe"
 
@@ -53,8 +54,15 @@ func (a *X86_64Backend) Compile(statements []parser.Expressao) error {
 	a.gerarPrologo()
 
 	// Emite corpos de funções antes do _start
-	for nome, fn := range a.functions {
-		a.gerarFuncaoUsuario(nome, fn)
+	if len(a.functions) > 0 {
+		nomes := make([]string, 0, len(a.functions))
+		for n := range a.functions {
+			nomes = append(nomes, n)
+		}
+		sort.Strings(nomes)
+		for _, nome := range nomes {
+			a.gerarFuncaoUsuario(nome, a.functions[nome])
+		}
 	}
 
 	// Se existe função principal(), chama ela. Senão, executa statements globais
@@ -110,35 +118,20 @@ func (a *X86_64Backend) Booleano(b *parser.Booleano) interface{} {
 
 func (a *X86_64Backend) LiteralTexto(literal *parser.LiteralTexto) interface{} {
 	// Implementa suporte a strings criando um label único
-	labelCount := a.labelCount
-	a.labelCount++
-	label := fmt.Sprintf("str_%d", labelCount)
-
-	// Armazena a string na seção .data
-	a.declararString(label, literal.Valor)
-
-	// Carrega o endereço da string em %rax
-	a.output.WriteString(fmt.Sprintf("    lea %s(%%rip), %%rax\n", label))
-
+	id := a.reserveID()
+	label := fmt.Sprintf("str_%d", id)
+	a.declararString(label, literal.Valor)                                 // Armazena string em .data
+	a.output.WriteString(fmt.Sprintf("    lea %s(%%rip), %%rax\n", label)) // Endereço da string em %rax
 	return nil
 }
 
 func (a *X86_64Backend) LiteralDecimal(literal *parser.LiteralDecimal) interface{} {
-	// Implementa suporte a números de ponto flutuante usando SSE
-	// Cria um label único para armazenar o valor decimal na seção .data
-	labelCount := a.labelCount
-	a.labelCount++
-	label := fmt.Sprintf("decimal_%d", labelCount)
-
-	// Armazena o valor decimal como double (8 bytes)
-	a.declararDecimal(label, literal.Valor)
-
-	// Carrega o valor decimal no registrador XMM0 (ponto flutuante)
-	a.output.WriteString(fmt.Sprintf("    movsd %s(%%rip), %%xmm0\n", label))
-
-	// Para compatibilidade com código existente que espera inteiros em %rax,
-	// converte o double para inteiro e move para %rax
-	a.output.WriteString("    cvttsd2si %xmm0, %rax\n")
+	// Implementa suporte a números de ponto flutuante usando SSE (armazenados em .data)
+	id := a.reserveID()
+	label := fmt.Sprintf("decimal_%d", id)
+	a.declararDecimal(label, literal.Valor)                                   // Armazena como double
+	a.output.WriteString(fmt.Sprintf("    movsd %s(%%rip), %%xmm0\n", label)) // Carrega em XMM0
+	a.output.WriteString("    cvttsd2si %xmm0, %rax\n")                       // Converte p/ inteiro em %rax (compatibilidade)
 
 	return nil
 }
@@ -177,46 +170,40 @@ func (a *X86_64Backend) OperacaoBinaria(operacao *parser.OperacaoBinaria) interf
 		a.output.WriteString("    cqo\n")
 		a.output.WriteString("    idiv %rbx\n")
 	case parser.POWER:
-		// Gera labels únicos para evitar colisão quando POWER aparece múltiplas vezes
-		id := a.labelCount
-		a.labelCount++
+		// Exponenciação multiplicações sucessivas
+		id := a.reserveID()
 		powLoop := fmt.Sprintf(".pow_loop_%d", id)
 		powDone := fmt.Sprintf(".pow_done_%d", id)
-
-		a.output.WriteString("    mov %rax, %rcx\n")  // copia a base de %rax para %rcx (base temporária)
-		a.output.WriteString("    mov $1, %rax\n")    // inicializa o resultado em %rax com 1 (valor neutro da multiplicação)
-		a.output.WriteString("    test %rbx, %rbx\n") // verifica se o expoente (%rbx) é zero
+		a.output.WriteString("    mov %rax, %rcx\n")  // base -> %rcx
+		a.output.WriteString("    mov $1, %rax\n")    // resultado = 1
+		a.output.WriteString("    test %rbx, %rbx\n") // expoente == 0 ?
 		a.output.WriteString(fmt.Sprintf("    jz %s\n", powDone))
 		a.output.WriteString(fmt.Sprintf("%s:\n", powLoop))
-		a.output.WriteString("    imul %rcx, %rax\n") // multiplica resultado (%rax) pela base (%rcx)
-		a.output.WriteString("    dec %rbx\n")        // decrementa o expoente
+		a.output.WriteString("    imul %rcx, %rax\n") // resultado *= base
+		a.output.WriteString("    dec %rbx\n")        // expoente--
 		a.output.WriteString(fmt.Sprintf("    jnz %s\n", powLoop))
-		a.output.WriteString(fmt.Sprintf("%s:\n", powDone)) // fim da exponenciação; %rax contém o resultado final
+		a.output.WriteString(fmt.Sprintf("%s:\n", powDone))
 
 	// Operações de comparação
-	case parser.IGUALDADE:
+	case parser.IGUALDADE, parser.DIFERENCA, parser.MENOR_QUE, parser.MAIOR_QUE, parser.MENOR_IGUAL, parser.MAIOR_IGUAL:
 		a.output.WriteString("    cmp %rbx, %rax\n")
-		a.output.WriteString("    sete %al\n")
-		a.output.WriteString("    movzx %al, %rax\n")
-	case parser.DIFERENCA:
-		a.output.WriteString("    cmp %rbx, %rax\n")
-		a.output.WriteString("    setne %al\n")
-		a.output.WriteString("    movzx %al, %rax\n")
-	case parser.MENOR_QUE:
-		a.output.WriteString("    cmp %rbx, %rax\n")
-		a.output.WriteString("    setl %al\n")
-		a.output.WriteString("    movzx %al, %rax\n")
-	case parser.MAIOR_QUE:
-		a.output.WriteString("    cmp %rbx, %rax\n")
-		a.output.WriteString("    setg %al\n")
-		a.output.WriteString("    movzx %al, %rax\n")
-	case parser.MENOR_IGUAL:
-		a.output.WriteString("    cmp %rbx, %rax\n")
-		a.output.WriteString("    setle %al\n")
-		a.output.WriteString("    movzx %al, %rax\n")
-	case parser.MAIOR_IGUAL:
-		a.output.WriteString("    cmp %rbx, %rax\n")
-		a.output.WriteString("    setge %al\n")
+		// Mapa operador -> instrução set*
+		var instr string
+		switch operacao.Operador {
+		case parser.IGUALDADE:
+			instr = "sete"
+		case parser.DIFERENCA:
+			instr = "setne"
+		case parser.MENOR_QUE:
+			instr = "setl"
+		case parser.MAIOR_QUE:
+			instr = "setg"
+		case parser.MENOR_IGUAL:
+			instr = "setle"
+		case parser.MAIOR_IGUAL:
+			instr = "setge"
+		}
+		a.output.WriteString(fmt.Sprintf("    %s %%-al\n", instr))
 		a.output.WriteString("    movzx %al, %rax\n")
 	}
 
@@ -323,10 +310,10 @@ func (a *X86_64Backend) gerarEpilogo() {
 }
 
 func (a *X86_64Backend) ComandoSe(comando *parser.ComandoSe) interface{} {
-	// Gera um label único para este comando if
-	labelFim := fmt.Sprintf(".if_fim_%d", a.labelCount)
-	labelSenao := fmt.Sprintf(".if_senao_%d", a.labelCount)
-	a.labelCount++
+	// Reserva um ID para os labels deste if (fim / senao compartilham mesmo id)
+	id := a.reserveID()
+	labelFim := fmt.Sprintf(".if_fim_%d", id)
+	labelSenao := fmt.Sprintf(".if_senao_%d", id)
 
 	// Avalia a condição
 	comando.Condicao.Aceitar(a)
@@ -369,9 +356,8 @@ func (a *X86_64Backend) Bloco(bloco *parser.Bloco) interface{} {
 }
 
 func (a *X86_64Backend) ComandoEnquanto(cmd *parser.ComandoEnquanto) interface{} {
-	// Labels únicos
-	id := a.labelCount
-	a.labelCount++
+	// Reserva ID único para o loop
+	id := a.reserveID()
 	lcond := fmt.Sprintf(".while_cond_%d", id)
 	lbody := fmt.Sprintf(".while_body_%d", id)
 	lend := fmt.Sprintf(".while_end_%d", id)
@@ -393,8 +379,7 @@ func (a *X86_64Backend) ComandoEnquanto(cmd *parser.ComandoEnquanto) interface{}
 }
 
 func (a *X86_64Backend) ComandoPara(cmd *parser.ComandoPara) interface{} {
-	id := a.labelCount
-	a.labelCount++
+	id := a.reserveID()
 	lcond := fmt.Sprintf(".for_cond_%d", id)
 	lbody := fmt.Sprintf(".for_body_%d", id)
 	lstep := fmt.Sprintf(".for_step_%d", id)
@@ -496,4 +481,11 @@ func (a *X86_64Backend) compilarAssembly(arquivoAssembly string) error {
 	debug.Printf("Para executar: ./%s\n", executavel)
 
 	return nil
+}
+
+// reserveID retorna e incrementa um ID incremental global, garantindo unicidade de labels
+func (a *X86_64Backend) reserveID() int {
+	id := a.labelCount
+	a.labelCount++
+	return id
 }
