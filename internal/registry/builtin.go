@@ -53,38 +53,51 @@ func NovoRegistroBuiltin() *RegistroBuiltin {
 	return registro
 }
 
-// registrarFuncoesBasicas registra as funções builtin básicas
-func (r *RegistroBuiltin) registrarFuncoesBasicas() {
-	// Função imprime - para saída de dados
-	r.RegistrarFuncao("imprime", AssinaturaFuncao{
-		Nome:           "imprime",
-		MinArgumentos:  1,
-		MaxArgumentos:  -1, // ilimitado
-		TiposArgumento: []TipoArgumento{TIPO_QUALQUER},
-		TipoFuncao:     FUNCAO_IMPRIME,
-		Descricao:      "Imprime valores na saída padrão",
-	}, func(argumentos []interface{}) (interface{}, error) {
-		return nil, nil
-	})
-
-	// Função soma (exemplo de como adicionar novas funções)
-	r.RegistrarFuncao("soma", AssinaturaFuncao{
-		Nome:           "soma",
-		MinArgumentos:  2,
-		MaxArgumentos:  -1, // ilimitado
-		TiposArgumento: []TipoArgumento{TIPO_INTEIRO},
-		TipoFuncao:     FUNCAO_PURA,
-		Descricao:      "Soma dois ou mais números",
-	}, func(argumentos []interface{}) (interface{}, error) {
-		resultado := 0
-		for _, arg := range argumentos {
-			if num, ok := arg.(int); ok {
-				resultado += num
+// Definições de funções builtin (otimizadas - definidas como constantes)
+var funcoesBuiltinPadroes = map[string]FuncaoBuiltin{
+	"imprime": {
+		Assinatura: AssinaturaFuncao{
+			Nome:           "imprime",
+			MinArgumentos:  1,
+			MaxArgumentos:  -1, // ilimitado
+			TiposArgumento: []TipoArgumento{TIPO_QUALQUER},
+			TipoFuncao:     FUNCAO_IMPRIME,
+			Descricao:      "Imprime valores na saída padrão",
+		},
+		Executar: func(argumentos []interface{}) (interface{}, error) {
+			return nil, nil
+		},
+	},
+	"soma": {
+		Assinatura: AssinaturaFuncao{
+			Nome:           "soma",
+			MinArgumentos:  2,
+			MaxArgumentos:  -1, // ilimitado
+			TiposArgumento: []TipoArgumento{TIPO_INTEIRO},
+			TipoFuncao:     FUNCAO_PURA,
+			Descricao:      "Soma dois ou mais números",
+		},
+		Executar: func(argumentos []interface{}) (interface{}, error) {
+			resultado := 0
+			for _, arg := range argumentos {
+				if num, ok := arg.(int); ok {
+					resultado += num
+				}
 			}
-		}
-		return resultado, nil
-	})
+			return resultado, nil
+		},
+	},
+}
 
+// registrarFuncoesBasicas registra as funções builtin básicas de forma otimizada
+func (r *RegistroBuiltin) registrarFuncoesBasicas() {
+	// Copia as funções pré-definidas para o registro
+	for nome, funcao := range funcoesBuiltinPadroes {
+		r.funcoes[nome] = &FuncaoBuiltin{
+			Assinatura: funcao.Assinatura,
+			Executar:   funcao.Executar,
+		}
+	}
 }
 
 // RegistrarFuncao adiciona uma nova função builtin ao registro
@@ -104,11 +117,20 @@ func (r *RegistroBuiltin) ObterAssinatura(nome string) (AssinaturaFuncao, bool) 
 	return funcao.Assinatura, true
 }
 
-// ValidarChamada valida uma chamada de função
-func (r *RegistroBuiltin) ValidarChamada(nome string, argumentos []interface{}) error {
+// obterFuncaoValidada retorna uma função validada ou erro
+func (r *RegistroBuiltin) obterFuncaoValidada(nome string) (*FuncaoBuiltin, error) {
 	funcao, ok := r.funcoes[nome]
 	if !ok {
-		return fmt.Errorf("função '%s' não encontrada", nome)
+		return nil, fmt.Errorf("função '%s' não encontrada", nome)
+	}
+	return funcao, nil
+}
+
+// ValidarChamada valida uma chamada de função
+func (r *RegistroBuiltin) ValidarChamada(nome string, argumentos []interface{}) error {
+	funcao, err := r.obterFuncaoValidada(nome)
+	if err != nil {
+		return err
 	}
 
 	assinatura := funcao.Assinatura
@@ -152,9 +174,9 @@ func (r *RegistroBuiltin) ListarFuncoes() []string {
 
 // ExecutarFuncao executa uma função builtin
 func (r *RegistroBuiltin) ExecutarFuncao(nome string, argumentos []interface{}) (interface{}, error) {
-	funcao, existe := r.funcoes[nome]
-	if !existe {
-		return nil, fmt.Errorf("função '%s' não está definida", nome)
+	funcao, err := r.obterFuncaoValidada(nome)
+	if err != nil {
+		return nil, err
 	}
 
 	return funcao.Executar(argumentos)

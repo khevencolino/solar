@@ -8,6 +8,11 @@ import (
 	"github.com/khevencolino/Solar/internal/utils"
 )
 
+// Constantes para melhor legibilidade
+const (
+	msgProgramaVazio = "programa vazio"
+)
+
 // Precedencia define a precedência dos operadores
 type Precedencia int
 
@@ -65,26 +70,12 @@ func (p *Parser) AnalisarPrograma() ([]Expressao, error) {
 		}
 		statements = append(statements, statement)
 
-		// Estruturas de controle (se, enquanto, para) e declarações de função não precisam de semicolon
-		if _, ok := statement.(*ComandoSe); ok {
-			continue
-		}
-		if _, ok := statement.(*ComandoEnquanto); ok {
-			continue
-		}
-		if _, ok := statement.(*ComandoPara); ok {
-			continue
-		}
-		if _, ehFuncDecl := statement.(*FuncaoDeclaracao); ehFuncDecl {
-			continue
-		}
-		if err := p.esperarSemicolon(); err != nil {
-			return nil, err
-		}
+		// Semicolon é opcional - permite código mais limpo e natural
+		p.consumirSemicolonOpcional()
 	}
 
 	if len(statements) == 0 {
-		return nil, utils.NovoErro("programa vazio", 0, 0, "")
+		return nil, utils.NovoErro(msgProgramaVazio, 0, 0, "")
 	}
 
 	return statements, nil
@@ -602,18 +593,11 @@ func (p *Parser) chegouAoFim() bool {
 		(p.posicaoAtual < len(p.tokens) && p.tokens[p.posicaoAtual].Type == lexer.EOF)
 }
 
-// esperarSemicolon verifica se o próximo token é um semicolon e o consome
-func (p *Parser) esperarSemicolon() error {
-	tok := p.tokenAtual()
-	switch tok.Type {
-	case lexer.SEMICOLON:
-		p.proximoToken() // consome o semicolon
-		return nil
-	case lexer.RBRACE, lexer.EOF:
-		// Semicolon opcional antes de '}' ou no fim do arquivo
-		return nil
-	default:
-		return fmt.Errorf("esperado ';' em %s, encontrado '%s'", tok.Position, tok.Value)
+// consumirSemicolonOpcional consome um semicolon se estiver presente
+// O semicolon é agora opcional na linguagem Solar para melhor ergonomia
+func (p *Parser) consumirSemicolonOpcional() {
+	if p.tokenAtual().Type == lexer.SEMICOLON {
+		p.proximoToken() // consome o semicolon se presente
 	}
 }
 
@@ -675,14 +659,8 @@ func (p *Parser) analisarBloco() (*Bloco, error) {
 		}
 		comandos = append(comandos, comando)
 
-		// Estruturas de controle (como 'se') e declarações de função não precisam de semicolon
-		if _, ehComandoSe := comando.(*ComandoSe); !ehComandoSe {
-			if _, ehFuncDecl := comando.(*FuncaoDeclaracao); !ehFuncDecl {
-				if err := p.esperarSemicolon(); err != nil {
-					return nil, err
-				}
-			}
-		}
+		// Semicolon é opcional também dentro de blocos
+		p.consumirSemicolonOpcional()
 	}
 
 	// Espera '}'

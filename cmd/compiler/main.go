@@ -8,27 +8,44 @@ import (
 	"github.com/khevencolino/Solar/internal/compiler"
 )
 
+// Config centraliza as configurações do compilador
+type Config struct {
+	ArquivoEntrada string
+	Backend        string
+	Arch           string
+	Debug          bool
+	ShowHelp       bool
+}
+
 func main() {
-	arquivoEntrada, backend, arch, debug, showHelp, err := processarArgumentos()
+	config, err := processarArgumentos()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Erro: %v\n", err)
 		os.Exit(1)
 	}
 
-	if showHelp {
+	if config.ShowHelp {
 		mostrarAjuda()
 		return
 	}
 
 	compilador := compiler.NovoCompilador()
 
-	if err := compilador.CompilarArquivo(arquivoEntrada, backend, arch, debug); err != nil {
+	// Converte para a estrutura de configuração do compiler
+	compileConfig := &compiler.CompileConfig{
+		ArquivoEntrada: config.ArquivoEntrada,
+		Backend:        config.Backend,
+		Arch:           config.Arch,
+		Debug:          config.Debug,
+	}
+
+	if err := compilador.CompilarArquivo(compileConfig); err != nil {
 		fmt.Fprintf(os.Stderr, "Erro de compilação: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func processarArgumentos() (string, string, string, bool, bool, error) {
+func processarArgumentos() (*Config, error) {
 	// Define flags
 	backend := flag.String("backend", "interpreter", "Backend a ser usado (interpreter, assembly, llvm)")
 	arch := flag.String("arch", "x86_64", "Arquitetura para assembly (x86_64)")
@@ -38,20 +55,26 @@ func processarArgumentos() (string, string, string, bool, bool, error) {
 	// Parse flags
 	flag.Parse()
 
+	config := &Config{
+		Backend:  *backend,
+		Arch:     *arch,
+		Debug:    *debug,
+		ShowHelp: *help,
+	}
+
 	// Verifica se help foi solicitado
 	if *help {
-		return "", "", "", false, true, nil
+		return config, nil
 	}
 
 	// Verifica se arquivo foi fornecido
 	args := flag.Args()
 	if len(args) < 1 {
-		return "", "", "", false, false, fmt.Errorf("arquivo de entrada requerido")
+		return nil, fmt.Errorf("arquivo de entrada requerido")
 	}
 
-	arquivo := args[0]
-
-	return arquivo, *backend, *arch, *debug, false, nil
+	config.ArquivoEntrada = args[0]
+	return config, nil
 }
 
 func mostrarAjuda() {

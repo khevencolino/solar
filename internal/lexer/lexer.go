@@ -28,35 +28,38 @@ func NovoLexer(entrada string) *Lexer {
 	return lexer
 }
 
-// inicializarPadroes inicializa os padrões regex para cada tipo de token
+// Padrões regex pré-compilados (otimização - compilados apenas uma vez)
+var padroesCompiledos = map[TokenType]*regexp.Regexp{
+	NUMBER:        regexp.MustCompile(`^\d+`),                    // Números inteiros: 123, 456
+	FLOAT:         regexp.MustCompile(`^\d+\.\d+`),               // Números decimais: 123.45, 0.5
+	STRING:        regexp.MustCompile(`^"[^"]*"`),                // Strings: "texto", "olá mundo"
+	PLUS:          regexp.MustCompile(`^\+`),                     // Adição: +
+	MINUS:         regexp.MustCompile(`^-`),                      // Subtração: -
+	MULTIPLY:      regexp.MustCompile(`^\*`),                     // Multiplicação: *
+	POWER:         regexp.MustCompile(`^\*\*`),                   // Potência: **
+	DIVIDE:        regexp.MustCompile(`^/`),                      // Divisão: /
+	LPAREN:        regexp.MustCompile(`^\(`),                     // Parêntese esquerdo: (
+	RPAREN:        regexp.MustCompile(`^\)`),                     // Parêntese direito: )
+	ASSIGN:        regexp.MustCompile(`^~>`),                     // Símbolo para alocar variável: ~>
+	IDENTIFIER:    regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*`), // Identificadores válidos (com underscore)
+	COMMA:         regexp.MustCompile(`^,`),                      // Vírgula: ,
+	SEMICOLON:     regexp.MustCompile(`^;`),                      // Ponto e vírgula: ;
+	COLON:         regexp.MustCompile(`^:`),                      // Dois pontos: :
+	WHITESPACE:    regexp.MustCompile(`^\s+`),                    // Espaços em branco
+	COMMENT:       regexp.MustCompile(`^//.*`),                   // Comentários: //
+	LBRACE:        regexp.MustCompile(`^\{`),                     // Chave esquerda: {
+	RBRACE:        regexp.MustCompile(`^\}`),                     // Chave direita: }
+	EQUAL:         regexp.MustCompile(`^==`),                     // Operador de igualdade: ==
+	NOT_EQUAL:     regexp.MustCompile(`^!=`),                     // Operador de diferença: !=
+	LESS_EQUAL:    regexp.MustCompile(`^<=`),                     // Operador menor ou igual: <=
+	GREATER_EQUAL: regexp.MustCompile(`^>=`),                     // Operador maior ou igual: >=
+	LESS:          regexp.MustCompile(`^<`),                      // Operador menor que: <
+	GREATER:       regexp.MustCompile(`^>`),                      // Operador maior que: >
+}
+
+// inicializarPadroes atribui os padrões pré-compilados
 func (l *Lexer) inicializarPadroes() {
-	l.padroes = map[TokenType]*regexp.Regexp{
-		NUMBER:        regexp.MustCompile(`^\d+`),                    // Números inteiros: 123, 456
-		FLOAT:         regexp.MustCompile(`^\d+\.\d+`),               // Números decimais: 123.45, 0.5
-		STRING:        regexp.MustCompile(`^"[^"]*"`),                // Strings: "texto", "olá mundo"
-		PLUS:          regexp.MustCompile(`^\+`),                     // Adição: +
-		MINUS:         regexp.MustCompile(`^-`),                      // Subtraço: -
-		MULTIPLY:      regexp.MustCompile(`^\*`),                     // Multiplicação: *
-		POWER:         regexp.MustCompile(`^\*\*`),                   // Potência: **
-		DIVIDE:        regexp.MustCompile(`^/`),                      // Divisão
-		LPAREN:        regexp.MustCompile(`^\(`),                     // Parêntese esquerdo: (
-		RPAREN:        regexp.MustCompile(`^\)`),                     // Parêntese direito: )
-		ASSIGN:        regexp.MustCompile(`^~>`),                     // Simbolo para alocar variavel ~>
-		IDENTIFIER:    regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*`), // Palavras permitidas para nomear variaveis (com underscore)
-		COMMA:         regexp.MustCompile(`^,`),                      // Vírgula: ,
-		SEMICOLON:     regexp.MustCompile(`^;`),                      // Ponto e vírgula: ;
-		COLON:         regexp.MustCompile(`^:`),                      // Dois pontos: :
-		WHITESPACE:    regexp.MustCompile(`^\s+`),                    // Espaços em branco
-		COMMENT:       regexp.MustCompile(`^//.*`),                   // Comentarios //
-		LBRACE:        regexp.MustCompile(`^\{`),                     // Chave esquerda: {
-		RBRACE:        regexp.MustCompile(`^\}`),                     // Chave direita: }
-		EQUAL:         regexp.MustCompile(`^==`),                     // Operador de igualdade: ==
-		NOT_EQUAL:     regexp.MustCompile(`^!=`),                     // Operador de diferença: !=
-		LESS_EQUAL:    regexp.MustCompile(`^<=`),                     // Operador menor ou igual: <=
-		GREATER_EQUAL: regexp.MustCompile(`^>=`),                     // Operador maior ou igual: >=
-		LESS:          regexp.MustCompile(`^<`),                      // Operador menor que: <
-		GREATER:       regexp.MustCompile(`^>`),                      // Operador maior que: >
-	}
+	l.padroes = padroesCompiledos
 }
 
 // Tokenizar converte a entrada em uma lista de tokens
@@ -124,49 +127,32 @@ func (l *Lexer) ehFuncaoBuiltin(nome string) bool {
 	return registry.RegistroGlobal.EhFuncaoBuiltin(nome)
 }
 
+// palavrasChave é um mapa pré-definido das palavras-chave
+var palavrasChave = map[string]TokenType{
+	"se":         SE,
+	"senao":      SENAO,
+	"definir":    DEFINIR,
+	"retornar":   RETORNAR,
+	"verdadeiro": VERDADEIRO,
+	"falso":      FALSO,
+	"para":       PARA,
+	"enquanto":   ENQUANTO,
+	"importar":   IMPORTAR,
+	"de":         DE,
+}
+
 // ehPalavraChave verifica se um identificador é uma palavra-chave
 func (l *Lexer) ehPalavraChave(nome string) bool {
-	palavrasChave := map[string]bool{
-		"se":         true,
-		"senao":      true,
-		"definir":    true,
-		"retornar":   true,
-		"verdadeiro": true,
-		"falso":      true,
-		"para":       true,
-		"enquanto":   true,
-		"importar":   true,
-		"de":         true,
-	}
-	return palavrasChave[nome]
+	_, existe := palavrasChave[nome]
+	return existe
 }
 
 // obterTipoPalavraChave retorna o tipo de token para uma palavra-chave
 func (l *Lexer) obterTipoPalavraChave(nome string) TokenType {
-	switch nome {
-	case "se":
-		return SE
-	case "senao":
-		return SENAO
-	case "definir":
-		return DEFINIR
-	case "retornar":
-		return RETORNAR
-	case "para":
-		return PARA
-	case "enquanto":
-		return ENQUANTO
-	case "verdadeiro":
-		return VERDADEIRO
-	case "falso":
-		return FALSO
-	case "importar":
-		return IMPORTAR
-	case "de":
-		return DE
-	default:
-		return IDENTIFIER
+	if tipoToken, existe := palavrasChave[nome]; existe {
+		return tipoToken
 	}
+	return IDENTIFIER
 }
 
 // obterPosicaoAtual retorna a posição atual no código fonte

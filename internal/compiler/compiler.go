@@ -14,6 +14,14 @@ import (
 	"github.com/khevencolino/Solar/internal/utils"
 )
 
+// CompileConfig centraliza as configurações de compilação
+type CompileConfig struct {
+	ArquivoEntrada string
+	Backend        string
+	Arch           string
+	Debug          bool
+}
+
 type Compiler struct {
 	lexer          *lexer.Lexer
 	parser         *parser.Parser
@@ -29,12 +37,12 @@ func NovoCompilador() *Compiler {
 	}
 }
 
-func (c *Compiler) CompilarArquivo(arquivoEntrada string, backendType string, arch string, debugEnabled bool) error {
-	c.debug = debugEnabled
-	debug.Enabled = debugEnabled
+func (c *Compiler) CompilarArquivo(config *CompileConfig) error {
+	c.debug = config.Debug
+	debug.Enabled = config.Debug
 
 	// Lê o arquivo
-	conteudo, err := utils.LerArquivo(arquivoEntrada)
+	conteudo, err := utils.LerArquivo(config.ArquivoEntrada)
 	if err != nil {
 		return err
 	}
@@ -73,7 +81,7 @@ func (c *Compiler) CompilarArquivo(arquivoEntrada string, backendType string, ar
 	}
 
 	// Seleciona e executa backend
-	return c.executarBackend(statements, backendType, arch)
+	return c.executarBackend(statements, config.Backend, config.Arch)
 }
 
 func (c *Compiler) executarBackend(statements []parser.Expressao, backendType string, arch string) error {
