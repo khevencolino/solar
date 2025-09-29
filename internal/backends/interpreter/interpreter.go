@@ -3,6 +3,7 @@ package interpreter
 import (
 	"fmt"
 	"math"
+	"strconv"
 
 	"github.com/khevencolino/Solar/internal/debug"
 	"github.com/khevencolino/Solar/internal/lexer"
@@ -95,7 +96,7 @@ func (i *InterpreterBackend) Compile(statements []parser.Expressao) error {
 		}
 	}
 
-	debug.Printf("\n Interpretação concluída! Resultado final: %d\n", ultimoResultado)
+	debug.Printf("\n Interpretação concluída! Resultado final: %v\n", ultimoResultado)
 	return nil
 }
 
@@ -139,16 +140,31 @@ func (i *InterpreterBackend) Variavel(variavel *parser.Variavel) interface{} {
 }
 
 func (i *InterpreterBackend) Atribuicao(atribuicao *parser.Atribuicao) interface{} {
-	// Avalia o valor da expressão
+	// Avalia o valor da expressão (pode ser int, bool, float64, string)
 	valorInterface := atribuicao.Valor.Aceitar(i)
 	if erro, ok := valorInterface.(error); ok {
 		return erro
 	}
-	valor := valorInterface.(int)
 
-	// Armazena na tabela de símbolos
-	i.variaveis[atribuicao.Nome] = Valor{Tipo: parser.TipoInteiro, Dados: valor}
-	return valor
+	// Detecta tipo dinamicamente (até ter tipagem estática mais forte aqui)
+	switch v := valorInterface.(type) {
+	case int:
+		i.variaveis[atribuicao.Nome] = Valor{Tipo: parser.TipoInteiro, Dados: v}
+	case bool:
+		i.variaveis[atribuicao.Nome] = Valor{Tipo: parser.TipoBooleano, Dados: v}
+	case float64:
+		i.variaveis[atribuicao.Nome] = Valor{Tipo: parser.TipoDecimal, Dados: v}
+	case string:
+		i.variaveis[atribuicao.Nome] = Valor{Tipo: parser.TipoTexto, Dados: v}
+	default:
+		return utils.NovoErro(
+			"tipo de valor não suportado na atribuição",
+			atribuicao.Token.Position.Line,
+			atribuicao.Token.Position.Column,
+			fmt.Sprintf("Tipo: %T", valorInterface),
+		)
+	}
+	return valorInterface
 }
 
 func (i *InterpreterBackend) OperacaoBinaria(operacao *parser.OperacaoBinaria) interface{} {
@@ -199,7 +215,22 @@ func (i *InterpreterBackend) evaluateOperand(expr parser.Expressao) (int, error)
 	if erro, ok := v.(error); ok {
 		return 0, erro
 	}
-	return v.(int), nil
+	switch val := v.(type) {
+	case int:
+		return val, nil
+	case bool:
+		// Permite usar booleano em contexto numérico (true=1,false=0)
+		if val {
+			return 1, nil
+		}
+		return 0, nil
+	default:
+		return 0, utils.NovoErro(
+			"operando não numérico",
+			0, 0,
+			fmt.Sprintf("Tipo: %T", v),
+		)
+	}
 }
 
 // compareInts converte bool para 1/0
@@ -306,34 +337,49 @@ func (i *InterpreterBackend) executarFuncaoBuiltin(nome string, tipo registry.Ti
 
 // executarImprime implementa a função imprime específica do interpretador
 func (i *InterpreterBackend) executarImprime(args []interface{}) interface{} {
+	// Suporte a múltiplos tipos básicos: inteiro, booleano, decimal, texto
 	for idx, arg := range args {
 		if idx > 0 {
 			fmt.Print(" ")
 		}
-		fmt.Print(arg)
+		fmt.Print(i.formatarValor(arg))
 	}
 	fmt.Println()
-	return 0
+	return 0 // retorno neutro para chamadas encadeadas
+}
+
+// formatarValor converte um valor para sua representação textual idiomática em Solar
+func (i *InterpreterBackend) formatarValor(v interface{}) string {
+	switch val := v.(type) {
+	case int:
+		return fmt.Sprintf("%d", val)
+	case bool:
+		if val {
+			return "verdadeiro"
+		}
+		return "falso"
+	case float64:
+		return strconv.FormatFloat(val, 'g', -1, 64)
+	case string:
+		return val
+	default:
+		return fmt.Sprintf("%v", val)
+	}
 }
 
 // ComandoSe implementa o comando if/else
 func (i *InterpreterBackend) ComandoSe(comando *parser.ComandoSe) interface{} {
-	// Avalia a condição
-	condicaoInterface := comando.Condicao.Aceitar(i)
-	if erro, ok := condicaoInterface.(error); ok {
+	condRaw := comando.Condicao.Aceitar(i)
+	if erro, ok := condRaw.(error); ok {
 		return erro
 	}
-	condicao := condicaoInterface.(int)
-
-	// Se a condição for verdadeira (não zero), executa o bloco "se"
-	if condicao != 0 {
+	verdade := i.isTruthy(condRaw)
+	if verdade {
 		return comando.BlocoSe.Aceitar(i)
-	} else if comando.BlocoSenao != nil {
-		// Se há bloco "senao" e a condição é falsa, executa o bloco "senao"
+	}
+	if comando.BlocoSenao != nil {
 		return comando.BlocoSenao.Aceitar(i)
 	}
-
-	// Se não há bloco "senao" e a condição é falsa, retorna 0
 	return 0
 }
 
@@ -345,7 +391,7 @@ func (i *InterpreterBackend) ComandoEnquanto(cmd *parser.ComandoEnquanto) interf
 		if erro, ok := c.(error); ok {
 			return erro
 		}
-		if c.(int) == 0 {
+		if !i.isTruthy(c) {
 			break
 		}
 		r := cmd.Corpo.Aceitar(i)
@@ -370,16 +416,15 @@ func (i *InterpreterBackend) ComandoPara(cmd *parser.ComandoPara) interface{} {
 	}
 	var ultimo interface{} = 0
 	for {
-		// condicao vazia => verdadeiro
-		cond := 1
+		condOk := true
 		if cmd.Condicao != nil {
 			c := cmd.Condicao.Aceitar(i)
 			if erro, ok := c.(error); ok {
 				return erro
 			}
-			cond = c.(int)
+			condOk = i.isTruthy(c)
 		}
-		if cond == 0 {
+		if !condOk {
 			break
 		}
 		r := cmd.Corpo.Aceitar(i)
@@ -415,7 +460,18 @@ func (i *InterpreterBackend) Bloco(bloco *parser.Bloco) interface{} {
 			if erro, ok := val.(error); ok {
 				return erro
 			}
-			return retornoValor{valor: val.(int)}
+			// Converte retorno não-int para int por enquanto (bool -> 0/1) até ter suporte tipado
+			switch x := val.(type) {
+			case int:
+				return retornoValor{valor: x}
+			case bool:
+				if x {
+					return retornoValor{valor: 1}
+				}
+				return retornoValor{valor: 0}
+			default:
+				return retornoValor{valor: 0}
+			}
 		}
 
 		resultado := comando.Aceitar(i)
@@ -447,7 +503,17 @@ func (i *InterpreterBackend) Retorno(ret *parser.Retorno) interface{} {
 	if erro, ok := val.(error); ok {
 		return erro
 	}
-	return retornoValor{valor: val.(int)}
+	switch x := val.(type) {
+	case int:
+		return retornoValor{valor: x}
+	case bool:
+		if x {
+			return retornoValor{valor: 1}
+		}
+		return retornoValor{valor: 0}
+	default:
+		return retornoValor{valor: 0}
+	}
 }
 
 // Suporte a importação (processadas antes da interpretação)
@@ -484,7 +550,19 @@ func (i *InterpreterBackend) executarFuncaoUsuario(fn *parser.FuncaoDeclaracao, 
 			i.variaveis = antigo
 			return erro
 		}
-		local[param.Nome] = Valor{Tipo: param.Tipo, Dados: v.(int)}
+		// Armazena dinamicamente conforme tipo recebido
+		switch x := v.(type) {
+		case int:
+			local[param.Nome] = Valor{Tipo: parser.TipoInteiro, Dados: x}
+		case bool:
+			local[param.Nome] = Valor{Tipo: parser.TipoBooleano, Dados: x}
+		case float64:
+			local[param.Nome] = Valor{Tipo: parser.TipoDecimal, Dados: x}
+		case string:
+			local[param.Nome] = Valor{Tipo: parser.TipoTexto, Dados: x}
+		default:
+			local[param.Nome] = Valor{Tipo: parser.TipoVazio, Dados: 0}
+		}
 	}
 
 	// Executa corpo
@@ -504,5 +582,17 @@ func (i *InterpreterBackend) executarFuncaoUsuario(fn *parser.FuncaoDeclaracao, 
 		return r
 	default:
 		return 0
+	}
+}
+
+// isTruthy aplica a regra de verdade: int != 0, bool == valor, outros => falso
+func (i *InterpreterBackend) isTruthy(v interface{}) bool {
+	switch x := v.(type) {
+	case int:
+		return x != 0
+	case bool:
+		return x
+	default:
+		return false
 	}
 }
