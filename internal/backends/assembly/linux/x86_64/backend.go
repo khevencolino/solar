@@ -203,7 +203,7 @@ func (a *X86_64Backend) OperacaoBinaria(operacao *parser.OperacaoBinaria) interf
 		case parser.MAIOR_IGUAL:
 			instr = "setge"
 		}
-		a.output.WriteString(fmt.Sprintf("    %s %%-al\n", instr))
+		a.output.WriteString(fmt.Sprintf("    %s %%al\n", instr))
 		a.output.WriteString("    movzx %al, %rax\n")
 	}
 
