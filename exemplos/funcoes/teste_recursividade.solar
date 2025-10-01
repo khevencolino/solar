@@ -1,0 +1,53 @@
+// Teste de recursividade
+
+// Fatorial recursivo
+definir fatorial(n: inteiro): inteiro {
+    se (n <= 1) {
+        retornar 1;
+    }
+    retornar n * fatorial(n - 1);
+}
+
+// Fibonacci recursivo
+definir fibonacci(n: inteiro): inteiro {
+    se (n <= 1) {
+        retornar n;
+    }
+    retornar fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+// Contagem regressiva recursiva
+definir contagem(n: inteiro): inteiro {
+    imprime(n);
+    se (n <= 0) {
+        retornar 0;
+    }
+    retornar contagem(n - 1);
+}
+
+// Soma recursiva de 1 até n
+definir soma_ate(n: inteiro): inteiro {
+    se (n <= 0) {
+        retornar 0;
+    }
+    retornar n + soma_ate(n - 1);
+}
+
+// Testa as funções recursivas
+imprime("Teste de Recursividade");
+imprime("======================");
+
+imprime("Fatorial de 5:");
+imprime(fatorial(5)); // Esperado: 120
+
+imprime("Fatorial de 0:");
+imprime(fatorial(0)); // Esperado: 1
+
+imprime("Fibonacci de 7:");
+imprime(fibonacci(7)); // Esperado: 13
+
+imprime("Contagem regressiva de 5:");
+contagem(5);
+
+imprime("Soma de 1 ate 10:");
+imprime(soma_ate(10)); // Esperado: 55

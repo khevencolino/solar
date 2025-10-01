@@ -1,0 +1,46 @@
+// Teste completo de variáveis em runtime
+
+definir testeEscopo(inicial: inteiro): inteiro {
+    // Variável local no escopo da função
+    local ~> inicial * 2;
+    temp ~> local + 10;
+    retornar temp;
+}
+
+definir principal(): inteiro {
+    // Variáveis simples
+    a ~> 5;
+    b ~> 10;
+    c ~> a + b;
+    
+    imprime(a, b, c);  // 5 10 15
+    
+    // Reatribuição
+    a ~> 20;
+    b ~> a * 2;
+    
+    imprime(a, b);  // 20 40
+    
+    // Variáveis em expressões complexas
+    resultado ~> (a + b) * 2 - 10;
+    imprime(resultado);  // 110
+    
+    // Teste de escopo com função
+    valor ~> testeEscopo(5);
+    imprime(valor);  // 20
+    
+    // Variável booleana
+    flag ~> verdadeiro;
+    se (flag) {
+        imprime(1);  // 1
+    }
+    
+    // Loop com variável
+    contador ~> 0;
+    enquanto (contador < 3) {
+        imprime(contador);  // 0 1 2
+        contador ~> contador + 1;
+    }
+    
+    retornar 0;
+}

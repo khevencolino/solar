@@ -1,0 +1,17 @@
+// Teste de uso de função recursiva importada
+
+importar fatorial de "./utilitarios";
+
+definir principal() {
+    imprime("Testando fatorial importado:");
+    imprime("fatorial(5) = ");
+    imprime(fatorial(5));
+    
+    imprime("fatorial(7) = ");
+    imprime(fatorial(7));
+    
+    imprime("fatorial(0) = ");
+    imprime(fatorial(0));
+    
+    retornar 0;
+}

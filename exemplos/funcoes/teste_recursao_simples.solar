@@ -1,0 +1,11 @@
+// Teste simples de recursividade - Fatorial
+
+definir fatorial(n: inteiro): inteiro {
+    se (n <= 1) {
+        retornar 1;
+    }
+    retornar n * fatorial(n - 1);
+}
+
+imprime("Fatorial de 5:");
+imprime(fatorial(5));

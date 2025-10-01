@@ -25,6 +25,9 @@ type X86_64Backend struct {
 	functions  map[string]*parser.FuncaoDeclaracao
 }
 
+// Registradores para passagem de argumentos (System V ABI)
+var paramRegisters = []string{"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"}
+
 func NewX86_64Backend() *X86_64Backend {
 	return &X86_64Backend{
 		variables: make(map[string]bool),
@@ -40,7 +43,17 @@ func (a *X86_64Backend) GetExtension() string { return ".s" }
 func (a *X86_64Backend) Compile(statements []parser.Expressao) error {
 	debug.Printf("Compilando para Assembly x86-64...\n")
 
-	// Primeira passada: coletar funções
+	funcaoPrincipal := a.coletarFuncoes(statements)
+	a.gerarPrologo()
+	a.gerarCorpoFuncoes()
+	a.gerarPontoEntrada(funcaoPrincipal, statements)
+	a.gerarEpilogo()
+
+	return a.escreverECompilar("programa.s")
+}
+
+// coletarFuncoes indexa todas as declarações de função
+func (a *X86_64Backend) coletarFuncoes(statements []parser.Expressao) *parser.FuncaoDeclaracao {
 	var funcaoPrincipal *parser.FuncaoDeclaracao
 	for _, s := range statements {
 		if fn, ok := s.(*parser.FuncaoDeclaracao); ok {
@@ -50,187 +63,187 @@ func (a *X86_64Backend) Compile(statements []parser.Expressao) error {
 			}
 		}
 	}
+	return funcaoPrincipal
+}
 
-	a.gerarPrologo()
-
-	// Emite corpos de funções antes do _start
-	if len(a.functions) > 0 {
-		nomes := make([]string, 0, len(a.functions))
-		for n := range a.functions {
-			nomes = append(nomes, n)
-		}
-		sort.Strings(nomes)
-		for _, nome := range nomes {
-			a.gerarFuncaoUsuario(nome, a.functions[nome])
-		}
+// gerarCorpoFuncoes emite o código de todas as funções do usuário
+func (a *X86_64Backend) gerarCorpoFuncoes() {
+	if len(a.functions) == 0 {
+		return
 	}
 
-	// Se existe função principal(), chama ela. Senão, executa statements globais
+	nomes := make([]string, 0, len(a.functions))
+	for n := range a.functions {
+		nomes = append(nomes, n)
+	}
+	sort.Strings(nomes)
+
+	for _, nome := range nomes {
+		a.gerarFuncaoUsuario(nome, a.functions[nome])
+	}
+}
+
+// gerarPontoEntrada cria o _start e executa código principal
+func (a *X86_64Backend) gerarPontoEntrada(funcaoPrincipal *parser.FuncaoDeclaracao, statements []parser.Expressao) {
+	a.emit(".global _start")
+	a.emit("_start:")
+
 	if funcaoPrincipal != nil {
 		debug.Printf("  Chamando função principal()...\n")
-		// Chama a função principal()
-		a.output.WriteString("    call principal\n")
+		a.emit("    call func_principal")
 	} else {
-		// Processa statements globais (comportamento antigo)
-		for i, stmt := range statements {
-			// Pula declarações de função pois já foram processadas
-			if _, ok := stmt.(*parser.FuncaoDeclaracao); !ok {
-				debug.Printf("  Processando statement global %d...\n", i+1)
-				a.checarExpressao(stmt)
-			}
+		a.processarStatementsGlobais(statements)
+	}
+}
+
+// processarStatementsGlobais executa código fora de funções
+func (a *X86_64Backend) processarStatementsGlobais(statements []parser.Expressao) {
+	for i, stmt := range statements {
+		if _, ok := stmt.(*parser.FuncaoDeclaracao); !ok {
+			debug.Printf("  Processando statement global %d...\n", i+1)
+			a.checarExpressao(stmt)
 		}
 	}
+}
 
-	a.gerarEpilogo()
-
-	// Escreve arquivo assembly
-	arquivoSaida := "programa.s"
-	if err := utils.EscreverArquivo(arquivoSaida, a.output.String()); err != nil {
+// escreverECompilar salva o assembly e gera executável
+func (a *X86_64Backend) escreverECompilar(nomeArquivo string) error {
+	if err := utils.EscreverArquivo(nomeArquivo, a.output.String()); err != nil {
 		return err
 	}
 
-	fmt.Println("Arquivo assembly criado com sucesso: ", arquivoSaida)
-
-	// Compila assembly para executável
-	return a.compilarAssembly(arquivoSaida)
+	fmt.Println("Arquivo assembly criado com sucesso: ", nomeArquivo)
+	return a.compilarAssembly(nomeArquivo)
 }
 
 func (a *X86_64Backend) checarExpressao(expr parser.Expressao) {
-	// Usa o padrão visitor para gerar código assembly
 	expr.Aceitar(a)
 }
 
-// Implementação da interface visitor
+// emit escreve uma linha de assembly
+func (a *X86_64Backend) emit(code string) {
+	a.output.WriteString(code)
+	a.output.WriteString("\n")
+}
+
+// emitf escreve uma linha de assembly formatada
+func (a *X86_64Backend) emitf(format string, args ...interface{}) {
+	a.output.WriteString(fmt.Sprintf(format, args...))
+	a.output.WriteString("\n")
+}
+
+// === Implementação da interface visitor ===
+
 func (a *X86_64Backend) Constante(constante *parser.Constante) interface{} {
-	// Suporte completo a números inteiros, incluindo negativos
-	a.output.WriteString(fmt.Sprintf("    mov $%d, %%rax\n", constante.Valor))
+	a.emitf("    mov $%d, %%rax", constante.Valor)
 	return nil
 }
 
 func (a *X86_64Backend) Booleano(b *parser.Booleano) interface{} {
+	valor := 0
 	if b.Valor {
-		a.output.WriteString("    mov $1, %rax\n")
-	} else {
-		a.output.WriteString("    mov $0, %rax\n")
+		valor = 1
 	}
+	a.emitf("    mov $%d, %%rax", valor)
 	return nil
 }
 
 func (a *X86_64Backend) LiteralTexto(literal *parser.LiteralTexto) interface{} {
-	// Implementa suporte a strings criando um label único
-	id := a.reserveID()
-	label := fmt.Sprintf("str_%d", id)
-	a.declararString(label, literal.Valor)                                 // Armazena string em .data
-	a.output.WriteString(fmt.Sprintf("    lea %s(%%rip), %%rax\n", label)) // Endereço da string em %rax
+	label := a.criarLabelString(literal.Valor)
+	a.emitf("    lea %s(%%rip), %%rax", label)
 	return nil
 }
 
 func (a *X86_64Backend) LiteralDecimal(literal *parser.LiteralDecimal) interface{} {
-	// Implementa suporte a números de ponto flutuante usando SSE (armazenados em .data)
-	id := a.reserveID()
-	label := fmt.Sprintf("decimal_%d", id)
-	a.declararDecimal(label, literal.Valor)                                   // Armazena como double
-	a.output.WriteString(fmt.Sprintf("    movsd %s(%%rip), %%xmm0\n", label)) // Carrega em XMM0
-	a.output.WriteString("    cvttsd2si %xmm0, %rax\n")                       // Converte p/ inteiro em %rax (compatibilidade)
-
+	label := a.criarLabelDecimal(literal.Valor)
+	a.emitf("    movsd %s(%%rip), %%xmm0", label)
+	a.emit("    cvttsd2si %xmm0, %rax")
 	return nil
 }
 
 func (a *X86_64Backend) Variavel(variavel *parser.Variavel) interface{} {
-	a.output.WriteString(fmt.Sprintf("    mov %s(%%rip), %%rax\n", a.getVarName(variavel.Nome)))
+	a.emitf("    mov %s(%%rip), %%rax", a.getVarName(variavel.Nome))
 	return nil
 }
 
 func (a *X86_64Backend) Atribuicao(atribuicao *parser.Atribuicao) interface{} {
 	a.declararVariavel(atribuicao.Nome)
 	atribuicao.Valor.Aceitar(a)
-	a.output.WriteString(fmt.Sprintf("    mov %%rax, %s(%%rip)\n", a.getVarName(atribuicao.Nome)))
+	a.emitf("    mov %%rax, %s(%%rip)", a.getVarName(atribuicao.Nome))
 	return nil
 }
 
 func (a *X86_64Backend) OperacaoBinaria(operacao *parser.OperacaoBinaria) interface{} {
-	// Operando esquerdo
 	operacao.OperandoEsquerdo.Aceitar(a)
-	a.output.WriteString("    push %rax\n")
+	a.emit("    push %rax")
 
-	// Operando direito
 	operacao.OperandoDireito.Aceitar(a)
-	a.output.WriteString("    mov %rax, %rbx\n")
-	a.output.WriteString("    pop %rax\n")
+	a.emit("    mov %rax, %rbx")
+	a.emit("    pop %rax")
 
-	// Operação
 	switch operacao.Operador {
 	case parser.ADICAO:
-		a.output.WriteString("    add %rbx, %rax\n")
+		a.emit("    add %rbx, %rax")
 	case parser.SUBTRACAO:
-		a.output.WriteString("    sub %rbx, %rax\n")
+		a.emit("    sub %rbx, %rax")
 	case parser.MULTIPLICACAO:
-		a.output.WriteString("    imul %rbx, %rax\n")
+		a.emit("    imul %rbx, %rax")
 	case parser.DIVISAO:
-		a.output.WriteString("    cqo\n")
-		a.output.WriteString("    idiv %rbx\n")
+		a.emit("    cqo")
+		a.emit("    idiv %rbx")
 	case parser.POWER:
-		// Exponenciação multiplicações sucessivas
-		id := a.reserveID()
-		powLoop := fmt.Sprintf(".pow_loop_%d", id)
-		powDone := fmt.Sprintf(".pow_done_%d", id)
-		a.output.WriteString("    mov %rax, %rcx\n")  // base -> %rcx
-		a.output.WriteString("    mov $1, %rax\n")    // resultado = 1
-		a.output.WriteString("    test %rbx, %rbx\n") // expoente == 0 ?
-		a.output.WriteString(fmt.Sprintf("    jz %s\n", powDone))
-		a.output.WriteString(fmt.Sprintf("%s:\n", powLoop))
-		a.output.WriteString("    imul %rcx, %rax\n") // resultado *= base
-		a.output.WriteString("    dec %rbx\n")        // expoente--
-		a.output.WriteString(fmt.Sprintf("    jnz %s\n", powLoop))
-		a.output.WriteString(fmt.Sprintf("%s:\n", powDone))
-
-	// Operações de comparação
+		a.gerarPotencia()
 	case parser.IGUALDADE, parser.DIFERENCA, parser.MENOR_QUE, parser.MAIOR_QUE, parser.MENOR_IGUAL, parser.MAIOR_IGUAL:
-		a.output.WriteString("    cmp %rbx, %rax\n")
-		// Mapa operador -> instrução set*
-		var instr string
-		switch operacao.Operador {
-		case parser.IGUALDADE:
-			instr = "sete"
-		case parser.DIFERENCA:
-			instr = "setne"
-		case parser.MENOR_QUE:
-			instr = "setl"
-		case parser.MAIOR_QUE:
-			instr = "setg"
-		case parser.MENOR_IGUAL:
-			instr = "setle"
-		case parser.MAIOR_IGUAL:
-			instr = "setge"
-		}
-		a.output.WriteString(fmt.Sprintf("    %s %%al\n", instr))
-		a.output.WriteString("    movzx %al, %rax\n")
+		a.gerarComparacao(operacao.Operador)
 	}
 
 	return nil
 }
 
-func (a *X86_64Backend) ChamadaFuncao(chamada *parser.ChamadaFuncao) interface{} {
-	// Função de usuário: chamada direta por label
-	if _, ok := a.functions[chamada.Nome]; ok {
-		// Avalia argumentos e coloca nos registradores na ordem: rdi, rsi, rdx, rcx, r8, r9
-		regs := []string{"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"}
-		n := len(chamada.Argumentos)
-		for idx := 0; idx < n && idx < len(regs); idx++ {
-			chamada.Argumentos[idx].Aceitar(a)
-			a.output.WriteString(fmt.Sprintf("    mov %%rax, %s\n", regs[idx]))
-		}
-		a.output.WriteString(fmt.Sprintf("    call func_%s\n", chamada.Nome))
-		return nil
+// gerarPotencia implementa exponenciação via loop
+func (a *X86_64Backend) gerarPotencia() {
+	id := a.reserveID()
+	loopLabel := fmt.Sprintf(".pow_loop_%d", id)
+	doneLabel := fmt.Sprintf(".pow_done_%d", id)
+
+	a.emit("    mov %rax, %rcx")
+	a.emit("    mov $1, %rax")
+	a.emit("    test %rbx, %rbx")
+	a.emitf("    jz %s", doneLabel)
+	a.emitf("%s:", loopLabel)
+	a.emit("    imul %rcx, %rax")
+	a.emit("    dec %rbx")
+	a.emitf("    jnz %s", loopLabel)
+	a.emitf("%s:", doneLabel)
+}
+
+// gerarComparacao gera código para operadores relacionais
+func (a *X86_64Backend) gerarComparacao(op parser.TipoOperador) {
+	instrucoes := map[parser.TipoOperador]string{
+		parser.IGUALDADE:   "sete",
+		parser.DIFERENCA:   "setne",
+		parser.MENOR_QUE:   "setl",
+		parser.MAIOR_QUE:   "setg",
+		parser.MENOR_IGUAL: "setle",
+		parser.MAIOR_IGUAL: "setge",
 	}
-	// Valida a função usando o registro
-	assinatura, ok := registry.RegistroGlobal.ObterAssinatura(chamada.Nome)
-	if !ok {
-		// Função não encontrada - erro de compilação
+
+	a.emit("    cmp %rbx, %rax")
+	a.emitf("    %s %%al", instrucoes[op])
+	a.emit("    movzx %al, %rax")
+}
+
+func (a *X86_64Backend) ChamadaFuncao(chamada *parser.ChamadaFuncao) interface{} {
+	if _, ok := a.functions[chamada.Nome]; ok {
+		a.gerarChamadaFuncaoUsuario(chamada)
 		return nil
 	}
 
-	// Valida número de argumentos
+	assinatura, ok := registry.RegistroGlobal.ObterAssinatura(chamada.Nome)
+	if !ok {
+		return nil
+	}
+
 	numArgs := len(chamada.Argumentos)
 	if numArgs < assinatura.MinArgumentos {
 		return nil
@@ -239,7 +252,6 @@ func (a *X86_64Backend) ChamadaFuncao(chamada *parser.ChamadaFuncao) interface{}
 		return nil
 	}
 
-	// Gera assembly baseado no tipo da função
 	switch assinatura.TipoFuncao {
 	case registry.FUNCAO_IMPRIME:
 		a.gerarAssemblyImprime(chamada.Argumentos)
@@ -249,132 +261,132 @@ func (a *X86_64Backend) ChamadaFuncao(chamada *parser.ChamadaFuncao) interface{}
 	return nil
 }
 
-// gerarAssemblyImprime gera código assembly para a função imprime
+// gerarChamadaFuncaoUsuario gera código para chamar funções definidas pelo usuário
+func (a *X86_64Backend) gerarChamadaFuncaoUsuario(chamada *parser.ChamadaFuncao) {
+	n := len(chamada.Argumentos)
+	maxRegs := len(paramRegisters)
+
+	for idx := 0; idx < n && idx < maxRegs; idx++ {
+		chamada.Argumentos[idx].Aceitar(a)
+		a.emitf("    mov %%rax, %s", paramRegisters[idx])
+	}
+	a.emitf("    call func_%s", chamada.Nome)
+}
+
 func (a *X86_64Backend) gerarAssemblyImprime(argumentos []parser.Expressao) {
 	for _, argumento := range argumentos {
 		argumento.Aceitar(a)
-		a.output.WriteString("    call imprime_num\n")
+		a.emit("    call imprime_num")
 	}
 }
 
-// gerarAssemblyFuncaoPura gera código assembly para funções puras
 func (a *X86_64Backend) gerarAssemblyFuncaoPura(nome string, argumentos []parser.Expressao) {
-	// Nenhuma função pura builtin implementada no momento
-	// As funções puras são delegadas para o registry global
+	// Funções puras builtin delegadas ao registry
 }
 
 func (a *X86_64Backend) gerarPrologo() {
-	// Código do runtime deve ficar na seção .text
-	a.output.WriteString(".section .text\n")
-	a.output.WriteString(`.include "external/runtime.s"`)
-	// Cria um marcador da seção .data que será substituído no epílogo
-	a.output.WriteString("\n.section .data\n")
-	// Volta para .text para o ponto de entrada
-	a.output.WriteString("\n.section .text\n")
-	a.output.WriteString(".global _start\n\n")
-	a.output.WriteString("_start:\n")
+	a.emit(".section .text")
+	a.emit(`.include "external/runtime.s"`)
+	a.emit("")
+	a.emit(".section .data")
+	a.emit("")
+	a.emit(".section .text")
 }
 
 func (a *X86_64Backend) gerarEpilogo() {
-	a.output.WriteString("    call sair\n\n")
+	a.emit("    call sair")
+	a.emit("")
 
-	// Adiciona seção de dados para variáveis, decimais e strings
-	if len(a.variables) > 0 || len(a.decimals) > 0 || len(a.strings) > 0 {
-		dataSection := ".section .data\n"
-
-		// Variáveis inteiras
-		for varName := range a.variables {
-			dataSection += fmt.Sprintf("%s: .quad 0\n", a.getVarName(varName))
-		}
-
-		// Decimais (double precision)
-		for label, valor := range a.decimals {
-			// Converte float64 para representação hexadecimal IEEE 754
-			bits := fmt.Sprintf("0x%016x", *(*uint64)(unsafe.Pointer(&valor)))
-			dataSection += fmt.Sprintf("%s: .quad %s\n", label, bits)
-		}
-
-		// Strings
-		for label, valor := range a.strings {
-			// Escapa caracteres especiais e adiciona terminador nulo
-			escapedStr := strings.ReplaceAll(valor, "\\", "\\\\")
-			escapedStr = strings.ReplaceAll(escapedStr, "\"", "\\\"")
-			dataSection += fmt.Sprintf("%s: .ascii \"%s\\0\"\n", label, escapedStr)
-		}
-
-		// Substitui seção de dados no início
-		fullCode := strings.Replace(a.output.String(), ".section .data\n", dataSection, 1)
-		a.output.Reset()
-		a.output.WriteString(fullCode)
+	if len(a.variables) == 0 && len(a.decimals) == 0 && len(a.strings) == 0 {
+		return
 	}
+
+	dataSection := a.construirSecaoDados()
+	fullCode := strings.Replace(a.output.String(), ".section .data\n", dataSection, 1)
+	a.output.Reset()
+	a.output.WriteString(fullCode)
+}
+
+// construirSecaoDados gera a seção .data completa
+func (a *X86_64Backend) construirSecaoDados() string {
+	var sb strings.Builder
+	sb.WriteString(".section .data\n")
+
+	for varName := range a.variables {
+		sb.WriteString(fmt.Sprintf("%s: .quad 0\n", a.getVarName(varName)))
+	}
+
+	for label, valor := range a.decimals {
+		bits := fmt.Sprintf("0x%016x", *(*uint64)(unsafe.Pointer(&valor)))
+		sb.WriteString(fmt.Sprintf("%s: .quad %s\n", label, bits))
+	}
+
+	for label, valor := range a.strings {
+		escapedStr := strings.ReplaceAll(valor, "\\", "\\\\")
+		escapedStr = strings.ReplaceAll(escapedStr, "\"", "\\\"")
+		sb.WriteString(fmt.Sprintf("%s: .ascii \"%s\\0\"\n", label, escapedStr))
+	}
+
+	return sb.String()
 }
 
 func (a *X86_64Backend) ComandoSe(comando *parser.ComandoSe) interface{} {
-	// Reserva um ID para os labels deste if (fim / senao compartilham mesmo id)
 	id := a.reserveID()
 	labelFim := fmt.Sprintf(".if_fim_%d", id)
 	labelSenao := fmt.Sprintf(".if_senao_%d", id)
 
-	// Avalia a condição
 	comando.Condicao.Aceitar(a)
-
-	// Testa se o resultado da condição é 0 (falso)
-	a.output.WriteString("    test %rax, %rax\n")
+	a.emit("    test %rax, %rax")
 
 	if comando.BlocoSenao != nil {
-		// Se há bloco senao, pula para o label senao se for falso
-		a.output.WriteString(fmt.Sprintf("    jz %s\n", labelSenao))
+		a.emitf("    jz %s", labelSenao)
 	} else {
-		// Se não há bloco senao, pula para o fim se for falso
-		a.output.WriteString(fmt.Sprintf("    jz %s\n", labelFim))
+		a.emitf("    jz %s", labelFim)
 	}
 
-	// Executa o bloco do "se"
+	posBefore := a.output.Len()
 	comando.BlocoSe.Aceitar(a)
 
-	if comando.BlocoSenao != nil {
-		// Pula para o fim após executar o bloco "se"
-		a.output.WriteString(fmt.Sprintf("    jmp %s\n", labelFim))
+	blockCode := a.output.String()[posBefore:]
+	hasReturn := strings.HasSuffix(strings.TrimSpace(blockCode), "ret")
 
-		// Label para o bloco "senao"
-		a.output.WriteString(fmt.Sprintf("%s:\n", labelSenao))
+	if comando.BlocoSenao != nil {
+		if !hasReturn {
+			a.emitf("    jmp %s", labelFim)
+		}
+		a.emitf("%s:", labelSenao)
 		comando.BlocoSenao.Aceitar(a)
 	}
 
-	// Label para o fim do comando if
-	a.output.WriteString(fmt.Sprintf("%s:\n", labelFim))
-
+	a.emitf("%s:", labelFim)
 	return nil
 }
 
 func (a *X86_64Backend) Bloco(bloco *parser.Bloco) interface{} {
-	// Executa todos os comandos do bloco
 	for _, comando := range bloco.Comandos {
 		comando.Aceitar(a)
+		if _, isReturn := comando.(*parser.Retorno); isReturn {
+			break
+		}
 	}
 	return nil
 }
 
 func (a *X86_64Backend) ComandoEnquanto(cmd *parser.ComandoEnquanto) interface{} {
-	// Reserva ID único para o loop
 	id := a.reserveID()
 	lcond := fmt.Sprintf(".while_cond_%d", id)
 	lbody := fmt.Sprintf(".while_body_%d", id)
 	lend := fmt.Sprintf(".while_end_%d", id)
 
-	// Jump para condição
-	a.output.WriteString(fmt.Sprintf("    jmp %s\n", lcond))
-	a.output.WriteString(fmt.Sprintf("%s:\n", lbody))
-	// Corpo
+	a.emitf("    jmp %s", lcond)
+	a.emitf("%s:", lbody)
 	cmd.Corpo.Aceitar(a)
-	// Volta para condição
-	a.output.WriteString(fmt.Sprintf("    jmp %s\n", lcond))
-	// Condição
-	a.output.WriteString(fmt.Sprintf("%s:\n", lcond))
+	a.emitf("    jmp %s", lcond)
+	a.emitf("%s:", lcond)
 	cmd.Condicao.Aceitar(a)
-	a.output.WriteString("    test %rax, %rax\n")
-	a.output.WriteString(fmt.Sprintf("    jnz %s\n", lbody))
-	a.output.WriteString(fmt.Sprintf("%s:\n", lend))
+	a.emit("    test %rax, %rax")
+	a.emitf("    jnz %s", lbody)
+	a.emitf("%s:", lend)
 	return nil
 }
 
@@ -385,96 +397,117 @@ func (a *X86_64Backend) ComandoPara(cmd *parser.ComandoPara) interface{} {
 	lstep := fmt.Sprintf(".for_step_%d", id)
 	lend := fmt.Sprintf(".for_end_%d", id)
 
-	// init
 	if cmd.Inicializacao != nil {
 		cmd.Inicializacao.Aceitar(a)
 	}
 
-	// Condição
-	a.output.WriteString(fmt.Sprintf("%s:\n", lcond))
+	a.emitf("%s:", lcond)
 	if cmd.Condicao != nil {
 		cmd.Condicao.Aceitar(a)
-		a.output.WriteString("    test %rax, %rax\n")
-		a.output.WriteString(fmt.Sprintf("    jz %s\n", lend))
+		a.emit("    test %rax, %rax")
+		a.emitf("    jz %s", lend)
 	}
 
-	// Corpo
-	a.output.WriteString(fmt.Sprintf("%s:\n", lbody))
+	a.emitf("%s:", lbody)
 	cmd.Corpo.Aceitar(a)
-	a.output.WriteString(fmt.Sprintf("    jmp %s\n", lstep))
+	a.emitf("    jmp %s", lstep)
 
-	// Passo
-	a.output.WriteString(fmt.Sprintf("%s:\n", lstep))
+	a.emitf("%s:", lstep)
 	if cmd.PosIteracao != nil {
 		cmd.PosIteracao.Aceitar(a)
 	}
-	a.output.WriteString(fmt.Sprintf("    jmp %s\n", lcond))
+	a.emitf("    jmp %s", lcond)
 
-	a.output.WriteString(fmt.Sprintf("%s:\n", lend))
+	a.emitf("%s:", lend)
 	return nil
 }
 
-// Declaração/definição de função do usuário (básica)
+// gerarFuncaoUsuario emite código para uma função definida pelo usuário
 func (a *X86_64Backend) gerarFuncaoUsuario(nome string, fn *parser.FuncaoDeclaracao) {
-	// Convenção System V: parâmetros em rdi, rsi, rdx, rcx, r8, r9; retorno em rax
-	a.output.WriteString(fmt.Sprintf("func_%s:\n", nome))
-	// Mapear parâmetros para variáveis (como globais simples com mov)
-	regs := []string{"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"}
+	a.emitf("func_%s:", nome)
+
+	maxRegs := len(paramRegisters)
 	for idx, p := range fn.Parametros {
-		if idx >= len(regs) {
-			break // mais de 6 parâmetros não são suportados
+		if idx >= maxRegs {
+			break
 		}
 		a.declararVariavel(p.Nome)
-		a.output.WriteString(fmt.Sprintf("    mov %s, %s(%%rip)\n", regs[idx], a.getVarName(p.Nome)))
+		a.emitf("    mov %s, %s(%%rip)", paramRegisters[idx], a.getVarName(p.Nome))
 	}
-	// Gerar corpo (usando as variáveis globais dos params)
+
 	fn.Corpo.Aceitar(a)
-	// Resultado esperado em %rax (pela última expressão)
-	a.output.WriteString("    ret\n\n")
+	a.emit("    ret")
+	a.emit("")
 }
 
-func (a *X86_64Backend) FuncaoDeclaracao(fn *parser.FuncaoDeclaracao) interface{} { return nil }
-func (a *X86_64Backend) Retorno(ret *parser.Retorno) interface{}                  { return nil }
-func (a *X86_64Backend) Importacao(imp *parser.Importacao) interface{}            { return nil }
+func (a *X86_64Backend) FuncaoDeclaracao(fn *parser.FuncaoDeclaracao) interface{} {
+	return nil
+}
+
+func (a *X86_64Backend) Retorno(ret *parser.Retorno) interface{} {
+	if ret.Valor != nil {
+		ret.Valor.Aceitar(a)
+	}
+	a.emit("    ret")
+	return nil
+}
+
+func (a *X86_64Backend) Importacao(imp *parser.Importacao) interface{} {
+	return nil
+}
+
+// === Helpers para gerenciamento de símbolos ===
 
 func (a *X86_64Backend) declararVariavel(nome string) {
 	a.variables[nome] = true
-}
-
-func (a *X86_64Backend) declararDecimal(nome string, valor float64) {
-	a.decimals[nome] = valor
-}
-
-func (a *X86_64Backend) declararString(nome string, valor string) {
-	a.strings[nome] = valor
 }
 
 func (a *X86_64Backend) getVarName(nome string) string {
 	return "var_" + nome
 }
 
+func (a *X86_64Backend) criarLabelString(valor string) string {
+	id := a.reserveID()
+	label := fmt.Sprintf("str_%d", id)
+	a.strings[label] = valor
+	return label
+}
+
+func (a *X86_64Backend) criarLabelDecimal(valor float64) string {
+	id := a.reserveID()
+	label := fmt.Sprintf("decimal_%d", id)
+	a.decimals[label] = valor
+	return label
+}
+
+func (a *X86_64Backend) reserveID() int {
+	id := a.labelCount
+	a.labelCount++
+	return id
+}
+
+// === Compilação e linkagem ===
+
 func (a *X86_64Backend) compilarAssembly(arquivoAssembly string) error {
-	// Este backend gera binários ELF Linux x86_64. Em outros SOs, apenas gere o .s.
 	if runtime.GOOS != "linux" {
 		return fmt.Errorf("backend assembly linux só monta/linka em Linux; arquivo gerado: %s", arquivoAssembly)
 	}
+
 	debug.Printf("Criando arquivo executavel...\n")
 	debug.Printf("Linkando com runtime...\n")
 
 	objectFile := filepath.Join("result", "programa.o")
-	// Garante que o diretório de saída existe
 	if err := os.MkdirAll(filepath.Dir(objectFile), 0o755); err != nil {
 		return fmt.Errorf("erro ao criar diretório de saída: %v", err)
 	}
-	cmdAs := exec.Command("as", "-I", ".", "-o", objectFile, arquivoAssembly)
-	if err := cmdAs.Run(); err != nil {
-		return fmt.Errorf("erro ao montar (as): %v", err)
+
+	if err := a.montar(arquivoAssembly, objectFile); err != nil {
+		return err
 	}
 
 	executavel := filepath.Join("result", "programa")
-	cmdLd := exec.Command("ld", "-o", executavel, objectFile)
-	if err := cmdLd.Run(); err != nil {
-		return fmt.Errorf("erro ao ligar (ld): %v", err)
+	if err := a.linkar(objectFile, executavel); err != nil {
+		return err
 	}
 
 	debug.Printf("Executável gerado: %s\n", executavel)
@@ -483,9 +516,18 @@ func (a *X86_64Backend) compilarAssembly(arquivoAssembly string) error {
 	return nil
 }
 
-// reserveID retorna e incrementa um ID incremental global, garantindo unicidade de labels
-func (a *X86_64Backend) reserveID() int {
-	id := a.labelCount
-	a.labelCount++
-	return id
+func (a *X86_64Backend) montar(arquivoAssembly, objectFile string) error {
+	cmdAs := exec.Command("as", "-I", ".", "-o", objectFile, arquivoAssembly)
+	if err := cmdAs.Run(); err != nil {
+		return fmt.Errorf("erro ao montar (as): %v", err)
+	}
+	return nil
+}
+
+func (a *X86_64Backend) linkar(objectFile, executavel string) error {
+	cmdLd := exec.Command("ld", "-o", executavel, objectFile)
+	if err := cmdLd.Run(); err != nil {
+		return fmt.Errorf("erro ao ligar (ld): %v", err)
+	}
+	return nil
 }

@@ -541,11 +541,19 @@ func (i *InterpreterBackend) executarFuncaoUsuario(fn *parser.FuncaoDeclaracao, 
 	// Salva contexto de variáveis e cria escopo local
 	antigo := i.variaveis
 	local := make(map[string]Valor)
+	// Copia variáveis do escopo anterior para permitir acesso a funções globais
+	for k, v := range i.variaveis {
+		local[k] = v
+	}
 	i.variaveis = local
 
-	// Avalia e vincula parâmetros
+	// Avalia e vincula parâmetros (no contexto do chamador, não do chamado)
 	for idx, param := range fn.Parametros {
+		// Temporariamente restaura o contexto anterior para avaliar argumentos
+		i.variaveis = antigo
 		v := chamada.Argumentos[idx].Aceitar(i)
+		i.variaveis = local
+
 		if erro, ok := v.(error); ok {
 			i.variaveis = antigo
 			return erro
