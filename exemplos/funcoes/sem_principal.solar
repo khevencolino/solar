@@ -1,0 +1,9 @@
+// Arquivo de teste sem função principal()
+// Deve gerar erro
+
+definir outra(x) {
+  imprime(x);
+}
+
+// código sem função principal - deve falhar
+outra(42);

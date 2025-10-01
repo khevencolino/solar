@@ -1,0 +1,6 @@
+// Anotação de tipo em variáveis
+
+x: Inteiro ~> 10;
+y ~> 20;         // sem anotação
+
+imprime(x + y);

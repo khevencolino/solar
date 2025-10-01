@@ -1,0 +1,16 @@
+// Teste de importação múltipla
+// Importa várias funções matemáticas
+
+importar abs, max, min de math;
+
+definir principal() {
+    a ~> 10;
+    b ~> 5;
+    c ~> 15;
+    
+    imprime(abs(a));
+    imprime(max(b, c));
+    imprime(min(b, c));
+    
+    retornar 0;
+}

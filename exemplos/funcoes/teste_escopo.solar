@@ -1,0 +1,20 @@
+// Teste de escopo de variáveis e shadowing
+
+x ~> 2;
+
+definir testeEscopo(x: inteiro, y: inteiro): inteiro {
+  // x aqui é o parâmetro
+  z ~> x + y; // variável local
+  imprime(x);   // deve imprimir o parâmetro
+  imprime(z);
+  retornar z;
+}
+
+definir principal(): inteiro {
+  x ~> 10;             // variável local
+  imprime(x);         // deve imprimir 10
+  resultado ~> testeEscopo(5, 3);
+  imprime(x);         // ainda deve ser 10
+  imprime(resultado); // deve ser 8
+  retornar 0;
+}

@@ -1,0 +1,17 @@
+// Exemplo demonstrando literais de texto e decimal
+definir principal() {
+    // Testando literais de texto
+    imprime("Olá, mundo!");
+    imprime("Este é um texto");
+    
+    // Testando literais decimais
+    imprime(3.14);
+    imprime(2.5);
+    imprime(0.1);
+    
+    // Testando combinação de tipos
+    imprime("Valor de pi:", 3.14159);
+    imprime("Número inteiro:", 42);
+    imprime("Decimal:", 2.718);
+    imprime("Booleano:", verdadeiro);
+}

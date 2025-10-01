@@ -1,0 +1,6 @@
+definir f(a: Inteiro, b: Inteiro): Inteiro {
+  a + b
+}
+
+f(1, 2);
+f(1, "Teste");

@@ -1,0 +1,18 @@
+// Exemplo mais complexo com diferentes combinações
+definir principal() {
+    imprime("=== Teste de Literais ===");
+    
+    // Strings com espaços e caracteres especiais
+    imprime("String com espaços");
+    imprime("123 dentro de string");
+    
+    // Decimais variados
+    imprime("Decimais grandes:", 999.999);
+    imprime("Decimais pequenos:", 0.001);
+    
+    // Combinação em uma linha
+    imprime("Idade:", 25, "Altura:", 1.75, "Nome:", "João");
+    
+    // Booleanos misturados
+    imprime("Verdadeiro:", verdadeiro, "Falso:", falso);
+}

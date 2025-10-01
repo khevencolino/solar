@@ -1,0 +1,6 @@
+// exemplo de enquanto
+x: inteiro ~> 0;
+enquanto (x < 5) {
+  imprime(x);
+  x ~> x + 1;
+}

@@ -1,0 +1,7 @@
+// Retorno explícito com 'retornar'
+
+definir f(x) {
+  retornar x * x;
+}
+
+imprime(f(6)); // 36

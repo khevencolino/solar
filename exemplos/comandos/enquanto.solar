@@ -1,0 +1,8 @@
+// Teste básico do comando "enquanto"
+x ~> 10;
+y ~> 5;
+
+enquanto x > y {
+    imprime(x)
+    x ~> x - 1
+}

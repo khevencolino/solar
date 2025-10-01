@@ -31,11 +31,11 @@ make help
 # Executar com interpretador (padrão)
 make run FILE=exemplos/operacao/valido.solar
 
-# Executar com bytecode + VM
-make run FILE=exemplos/operacao/valido.solar BACKEND=bytecode
-
 # Executar com assembly
 make run FILE=exemplos/operacao/valido.solar BACKEND=assembly
+
+# Executar com LLVM IR
+make run FILE=exemplos/operacao/valido.solar BACKEND=llvm
 ```
 
 ### CLI Direta
@@ -44,11 +44,14 @@ make run FILE=exemplos/operacao/valido.solar BACKEND=assembly
 # Interpretador
 go run cmd/compiler/main.go arquivo.solar
 
-# Bytecode
-go run cmd/compiler/main.go -backend=bytecode arquivo.solar
+# LLVM IR
+go run cmd/compiler/main.go -backend=llvm arquivo.solar
 
-# Assembly ARM64
-go run cmd/compiler/main.go -backend=assembly -arch=arm64 arquivo.solar
+# Assembly x86-64
+go run cmd/compiler/main.go -backend=assembly arquivo.solar
+
+# Com debug habilitado
+go run cmd/compiler/main.go -debug arquivo.solar
 ```
 
 ## Exemplos
@@ -88,24 +91,39 @@ Resultado: 15
 Resultado: 15
 ```
 
+### Expressões Complexas
+
+```solar
+imprime(soma(2, 3), abs(-7))
+```
+
 ## Backends
 
 ### Interpretador
 
 Execução direta da AST.
 
-### Bytecode + VM
-
-Compilação para bytecode próprio com máquina virtual.
-
-### Assembly (x86-64/ARM64)
+### Assembly (x86-64)
 
 Geração de código nativo.
 
+### LLVM IR
+
+Compilação para LLVM Intermediate Representation.
+
 ```bash
-# Escolher backend
-make run FILE=arquivo.solar BACKEND=bytecode
 make run FILE=arquivo.solar BACKEND=assembly
+make run FILE=arquivo.solar BACKEND=llvm
+```
+
+## Desenvolvimento
+
+### Build
+
+```bash
+make build       # Compilar
+make run FILE=exemplo.solar    # Executar
+make clean       # Limpar
 ```
 
 ### Estrutura

@@ -7,7 +7,9 @@ type TokenType int
 
 const (
 	// Tipos de tokens
-	NUMBER     TokenType = iota // Números
+	NUMBER     TokenType = iota // Números inteiros
+	FLOAT                       // Números decimais
+	STRING                      // Strings (texto entre aspas)
 	PLUS                        // Operador de adição (+)
 	MINUS                       // Operador de subtração (-)
 	MULTIPLY                    // Operador de multiplicação (*)
@@ -20,9 +22,34 @@ const (
 	IDENTIFIER                  // Identificador da variavel
 	FUNCTION                    // Função builtin
 	COMMA                       // Vírgula (,)
+	SEMICOLON                   // Ponto e vírgula (;)
+	COLON                       // Dois pontos (:)
 	WHITESPACE                  // Espaços em branco
 	EOF                         // Fim do arquivo
 	INVALID                     // Token inválido
+
+	// Tokens para estruturas de controle
+	SE            // Comando "se" (if)
+	SENAO         // Comando "senao" (else)
+	DEFINIR       // Declaração de função "definir"
+	RETORNAR      // Comando de retorno "retornar"
+	LBRACE        // Chave esquerda {
+	RBRACE        // Chave direita }
+	EQUAL         // Operador de igualdade ==
+	NOT_EQUAL     // Operador de diferença !=
+	LESS          // Operador menor que <
+	GREATER       // Operador maior que >
+	LESS_EQUAL    // Operador menor ou igual <=
+	GREATER_EQUAL // Operador maior ou igual >=
+	// Boolean literals
+	VERDADEIRO // verdadeiro
+	FALSO      // falso
+	// Loops
+	PARA     // for
+	ENQUANTO // while
+	// Imports
+	IMPORTAR // importar
+	DE       // de
 )
 
 // String retorna uma representação em string do tipo de token
@@ -30,6 +57,10 @@ func (t TokenType) String() string {
 	switch t {
 	case NUMBER:
 		return "NUMBER"
+	case FLOAT:
+		return "FLOAT"
+	case STRING:
+		return "STRING"
 	case PLUS:
 		return "PLUS"
 	case MINUS:
@@ -58,8 +89,48 @@ func (t TokenType) String() string {
 		return "FUNCTION"
 	case COMMA:
 		return "COMMA"
+	case SEMICOLON:
+		return "SEMICOLON"
+	case COLON:
+		return "COLON"
 	case INVALID:
 		return "INVALID"
+	case SE:
+		return "SE"
+	case SENAO:
+		return "SENAO"
+	case LBRACE:
+		return "LBRACE"
+	case RBRACE:
+		return "RBRACE"
+	case DEFINIR:
+		return "DEFINIR"
+	case RETORNAR:
+		return "RETORNAR"
+	case EQUAL:
+		return "EQUAL"
+	case NOT_EQUAL:
+		return "NOT_EQUAL"
+	case LESS:
+		return "LESS"
+	case GREATER:
+		return "GREATER"
+	case LESS_EQUAL:
+		return "LESS_EQUAL"
+	case GREATER_EQUAL:
+		return "GREATER_EQUAL"
+	case VERDADEIRO:
+		return "VERDADEIRO"
+	case FALSO:
+		return "FALSO"
+	case PARA:
+		return "PARA"
+	case ENQUANTO:
+		return "ENQUANTO"
+	case IMPORTAR:
+		return "IMPORTAR"
+	case DE:
+		return "DE"
 	default:
 		return "UNKNOWN"
 	}

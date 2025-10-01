@@ -1,0 +1,8 @@
+// Exemplos de anotações de tipos
+
+definir ident(x: inteiro, y: inteiro): inteiro { x; }
+
+definir loga(msg: texto): vazio { imprime(0); }
+
+ident(1, 2);
+loga("ok");

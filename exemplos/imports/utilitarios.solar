@@ -1,0 +1,17 @@
+// Teste de importação de módulo customizado
+// Este arquivo define funções que podem ser importadas
+
+definir somar(a, b) {
+    retornar a + b;
+}
+
+definir multiplicar(a, b) {
+    retornar a * b;
+}
+
+definir fatorial(n) {
+    se (n <= 1) {
+        retornar 1;
+    }
+    retornar n * fatorial(n - 1);
+}

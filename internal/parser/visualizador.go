@@ -22,6 +22,12 @@ func (v *VisualizadorArvore) CriarArvore(expressao Expressao) *tree.Tree {
 		// Cria árvore com apenas um nó (constante)
 		return tree.NewTree(tree.NodeString(strconv.Itoa(expr.Valor)))
 
+	case *Booleano:
+		if expr.Valor {
+			return tree.NewTree(tree.NodeString("verdadeiro"))
+		}
+		return tree.NewTree(tree.NodeString("falso"))
+
 	case *OperacaoBinaria:
 		// Cria árvore com operador como raiz
 		arvore := tree.NewTree(tree.NodeString(expr.Operador.String()))
@@ -55,6 +61,12 @@ func (v *VisualizadorArvore) criarArvoreRecursiva(expressao Expressao) *tree.Tre
 	case *Constante:
 		return tree.NewTree(tree.NodeString(strconv.Itoa(expr.Valor)))
 
+	case *Booleano:
+		if expr.Valor {
+			return tree.NewTree(tree.NodeString("verdadeiro"))
+		}
+		return tree.NewTree(tree.NodeString("falso"))
+
 	case *Variavel:
 		return tree.NewTree(tree.NodeString(expr.Nome))
 
@@ -84,6 +96,83 @@ func (v *VisualizadorArvore) criarArvoreRecursiva(expressao Expressao) *tree.Tre
 			subarvoreArgumento := v.criarArvoreRecursiva(argumento)
 			v.adicionarSubarvore(arvore, subarvoreArgumento)
 		}
+		return arvore
+
+	case *FuncaoDeclaracao:
+		rotulo := fmt.Sprintf("definir %s", expr.Nome)
+		arvore := tree.NewTree(tree.NodeString(rotulo))
+		// parâmetros
+		params := tree.NewTree(tree.NodeString("parametros"))
+		for _, p := range expr.Parametros {
+			paramStr := fmt.Sprintf("%s: %s", p.Nome, p.Tipo.String())
+			params.AddChild(tree.NodeString(paramStr))
+		}
+		v.adicionarSubarvore(arvore, params)
+		// corpo
+		corpo := v.criarArvoreRecursiva(expr.Corpo)
+		v.adicionarSubarvore(arvore, corpo)
+		return arvore
+
+	case *Retorno:
+		arvore := tree.NewTree(tree.NodeString("retornar"))
+		if expr.Valor != nil {
+			sub := v.criarArvoreRecursiva(expr.Valor)
+			v.adicionarSubarvore(arvore, sub)
+		}
+		return arvore
+
+	case *ComandoSe:
+		arvore := tree.NewTree(tree.NodeString("se"))
+
+		// Adiciona condição
+		condicaoArvore := v.criarArvoreRecursiva(expr.Condicao)
+		v.adicionarSubarvore(arvore, condicaoArvore)
+
+		// Adiciona bloco "se"
+		blocoSeArvore := v.criarArvoreRecursiva(expr.BlocoSe)
+		v.adicionarSubarvore(arvore, blocoSeArvore)
+
+		// Adiciona bloco "senao" se existir
+		if expr.BlocoSenao != nil {
+			blocoSenaoArvore := v.criarArvoreRecursiva(expr.BlocoSenao)
+			senaoArvore := tree.NewTree(tree.NodeString("senao"))
+			v.adicionarSubarvore(senaoArvore, blocoSenaoArvore)
+			v.adicionarSubarvore(arvore, senaoArvore)
+		}
+
+		return arvore
+
+	case *ComandoEnquanto:
+		arvore := tree.NewTree(tree.NodeString("enquanto"))
+		cond := v.criarArvoreRecursiva(expr.Condicao)
+		v.adicionarSubarvore(arvore, cond)
+		body := v.criarArvoreRecursiva(expr.Corpo)
+		v.adicionarSubarvore(arvore, body)
+		return arvore
+
+	case *ComandoPara:
+		arvore := tree.NewTree(tree.NodeString("para"))
+		if expr.Inicializacao != nil {
+			v.adicionarSubarvore(arvore, v.criarArvoreRecursiva(expr.Inicializacao))
+		}
+		if expr.Condicao != nil {
+			v.adicionarSubarvore(arvore, v.criarArvoreRecursiva(expr.Condicao))
+		}
+		if expr.PosIteracao != nil {
+			v.adicionarSubarvore(arvore, v.criarArvoreRecursiva(expr.PosIteracao))
+		}
+		v.adicionarSubarvore(arvore, v.criarArvoreRecursiva(expr.Corpo))
+		return arvore
+
+	case *Bloco:
+		arvore := tree.NewTree(tree.NodeString("bloco"))
+
+		// Adiciona cada comando do bloco
+		for _, comando := range expr.Comandos {
+			comandoArvore := v.criarArvoreRecursiva(comando)
+			v.adicionarSubarvore(arvore, comandoArvore)
+		}
+
 		return arvore
 
 	default:

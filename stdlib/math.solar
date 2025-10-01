@@ -1,0 +1,27 @@
+// Módulo matemático
+// Funções matemáticas básicas
+
+definir abs(valor) {
+    se (valor < 0) {
+        retornar 0 - valor;
+    }
+    retornar valor;
+}
+
+definir max(a, b) {
+    se (a > b) {
+        retornar a;
+    }
+    retornar b;
+}
+
+definir min(a, b) {
+    se (a < b) {
+        retornar a;
+    }
+    retornar b;
+}
+
+definir potencia(base, expoente) {
+    retornar base ** expoente;
+}

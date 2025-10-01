@@ -1,0 +1,19 @@
+// Uso básico de booleanos
+x ~> 10;
+y ~> 5;
+
+a ~> verdadeiro;
+b ~> falso;
+
+se a {
+  imprime(x);
+} senao {
+  imprime(y);
+}
+
+// Comparações retornam booleano
+c ~> x > y;
+imprime(c);
+
+// Igualdade booleana
+imprime(a == b);
