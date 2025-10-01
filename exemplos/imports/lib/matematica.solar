@@ -1,0 +1,14 @@
+// Módulo de funções matemáticas customizadas
+// Para testar imports relativos
+
+definir dobro(x: inteiro): inteiro {
+    retornar x * 2
+}
+
+definir triplo(x: inteiro): inteiro {
+    retornar x * 3
+}
+
+definir quadrado(x: inteiro): inteiro {
+    retornar x * x
+}

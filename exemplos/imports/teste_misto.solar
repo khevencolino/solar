@@ -1,0 +1,23 @@
+// Teste combinando importações de módulos padrão e caminhos relativos
+
+// Importação de módulo padrão (sem caminho)
+importar abs, max de math;
+
+// Importação com caminho relativo explícito
+importar dobro, quadrado de "./lib/matematica";
+
+definir principal() {
+    a ~> -10;
+    b ~> 5;
+    c ~> 3;
+    
+    // Funções da stdlib
+    imprime(abs(a));        // deve imprimir 10
+    imprime(max(b, c));     // deve imprimir 5
+    
+    // Funções importadas de módulo local
+    imprime(dobro(c));      // deve imprimir 6
+    imprime(quadrado(b));   // deve imprimir 25
+    
+    retornar 0;
+}

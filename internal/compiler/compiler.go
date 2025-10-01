@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/khevencolino/Solar/internal/backends"
 	"github.com/khevencolino/Solar/internal/backends/assembly"
@@ -40,6 +41,13 @@ func NovoCompilador() *Compiler {
 func (c *Compiler) CompilarArquivo(config *CompileConfig) error {
 	c.debug = config.Debug
 	debug.Enabled = config.Debug
+
+	// Define o arquivo fonte atual para resolução de imports relativos
+	absPath, err := filepath.Abs(config.ArquivoEntrada)
+	if err != nil {
+		return fmt.Errorf("erro ao obter caminho absoluto: %v", err)
+	}
+	c.moduleResolver.SetArquivoFonteAtual(absPath)
 
 	// Lê o arquivo
 	conteudo, err := utils.LerArquivo(config.ArquivoEntrada)

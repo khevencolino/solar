@@ -1,0 +1,13 @@
+// Teste de importação com caminho relativo que sobe diretório
+// importar simbolo de "../caminho"
+
+importar dobro, quadrado de "../lib/matematica";
+
+definir principal() {
+    y ~> 7;
+    
+    imprime(dobro(y));      // deve imprimir 14
+    imprime(quadrado(y));   // deve imprimir 49
+    
+    retornar 0;
+}

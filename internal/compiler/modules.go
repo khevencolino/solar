@@ -15,6 +15,8 @@ type ModuleResolver struct {
 	modulosCarregados map[string]*ModuloCarregado
 	// Caminhos onde buscar módulos
 	caminhosBusca []string
+	// Caminho do arquivo fonte atual (para resolver imports relativos)
+	arquivoFonteAtual string
 }
 
 // ModuloCarregado representa um módulo já processado
@@ -52,10 +54,14 @@ func NewModuleResolver() *ModuleResolver {
 	}
 }
 
-// ResolverModulo encontra e carrega um módulo pelo nome
+// ResolverModulo encontra e carrega um módulo pelo nome ou caminho
 func (mr *ModuleResolver) ResolverModulo(nomeModulo string) (*ModuloCarregado, error) {
+	// Normaliza o caminho para usar como chave no cache
+	caminhoNormalizado, _ := filepath.Abs(nomeModulo)
+	cacheKey := caminhoNormalizado
+
 	// Verifica se já foi carregado
-	if modulo, existe := mr.modulosCarregados[nomeModulo]; existe {
+	if modulo, existe := mr.modulosCarregados[cacheKey]; existe {
 		return modulo, nil
 	}
 
@@ -71,8 +77,8 @@ func (mr *ModuleResolver) ResolverModulo(nomeModulo string) (*ModuloCarregado, e
 		return nil, err
 	}
 
-	// Cache do módulo
-	mr.modulosCarregados[nomeModulo] = modulo
+	// Cache do módulo usando caminho normalizado
+	mr.modulosCarregados[cacheKey] = modulo
 	return modulo, nil
 }
 
@@ -81,6 +87,78 @@ func (mr *ModuleResolver) encontrarArquivoModulo(nomeModulo string) (string, err
 	// Possíveis extensões de arquivo
 	extensoes := []string{".solar", ".sl"}
 
+	// Verifica se é um caminho explícito (relativo ou absoluto)
+	if mr.ehCaminhoExplicito(nomeModulo) {
+		return mr.resolverCaminhoExplicito(nomeModulo, extensoes)
+	}
+
+	// Caso contrário, procura nos caminhos de busca padrão
+	return mr.procurarNoCaminhosBusca(nomeModulo, extensoes)
+}
+
+// ehCaminhoExplicito verifica se o nome do módulo é um caminho explícito
+func (mr *ModuleResolver) ehCaminhoExplicito(nomeModulo string) bool {
+	// Caminho absoluto (começa com / no Unix ou C:\ no Windows)
+	if filepath.IsAbs(nomeModulo) {
+		return true
+	}
+
+	// Caminho relativo (começa com ./ ou ../)
+	if len(nomeModulo) >= 2 {
+		if nomeModulo[0:2] == "./" || nomeModulo[0:2] == ".." {
+			return true
+		}
+	}
+
+	return false
+}
+
+// resolverCaminhoExplicito resolve um caminho explícito (relativo ou absoluto)
+func (mr *ModuleResolver) resolverCaminhoExplicito(caminho string, extensoes []string) (string, error) {
+	// Se é um caminho relativo, resolve em relação ao arquivo fonte atual
+	if !filepath.IsAbs(caminho) && mr.arquivoFonteAtual != "" {
+		dirFonte := filepath.Dir(mr.arquivoFonteAtual)
+		caminho = filepath.Join(dirFonte, caminho)
+	}
+
+	// Tenta o caminho exato primeiro
+	if _, err := os.Stat(caminho); err == nil {
+		return filepath.Abs(caminho)
+	}
+
+	// Tenta adicionar extensões
+	for _, extensao := range extensoes {
+		caminhoComExt := caminho
+		if filepath.Ext(caminho) == "" {
+			caminhoComExt = caminho + extensao
+		}
+		if _, err := os.Stat(caminhoComExt); err == nil {
+			return filepath.Abs(caminhoComExt)
+		}
+	}
+
+	// Tenta nome/nome.extensao (para pacotes)
+	base := filepath.Base(caminho)
+	for _, extensao := range extensoes {
+		caminhoCompleto := filepath.Join(caminho, base+extensao)
+		if _, err := os.Stat(caminhoCompleto); err == nil {
+			return filepath.Abs(caminhoCompleto)
+		}
+	}
+
+	// Tenta nome/index.extensao
+	for _, extensao := range extensoes {
+		caminhoCompleto := filepath.Join(caminho, "index"+extensao)
+		if _, err := os.Stat(caminhoCompleto); err == nil {
+			return filepath.Abs(caminhoCompleto)
+		}
+	}
+
+	return "", fmt.Errorf("arquivo não encontrado: %s (tentativas com extensões %v)", caminho, extensoes)
+}
+
+// procurarNoCaminhosBusca procura o módulo nos caminhos de busca configurados
+func (mr *ModuleResolver) procurarNoCaminhosBusca(nomeModulo string, extensoes []string) (string, error) {
 	for _, caminhoBusca := range mr.caminhosBusca {
 		for _, extensao := range extensoes {
 			// Tenta nome.extensao
@@ -218,4 +296,9 @@ func (mr *ModuleResolver) AdicionarCaminhoBusca(caminho string) {
 		}
 	}
 	mr.caminhosBusca = append(mr.caminhosBusca, caminho)
+}
+
+// SetArquivoFonteAtual define o arquivo fonte atual para resolução de imports relativos
+func (mr *ModuleResolver) SetArquivoFonteAtual(caminho string) {
+	mr.arquivoFonteAtual = caminho
 }

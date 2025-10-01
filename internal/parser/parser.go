@@ -166,6 +166,8 @@ func (p *Parser) analisarRetorno() (Expressao, error) {
 // Suporta: importar imprime de io;
 //
 //	importar soma, mul de math;
+//	importar a de "./relative/path";
+//	importar b de "/absolute/path";
 func (p *Parser) analisarImportacao() (Expressao, error) {
 	tok := p.proximoToken() // consome 'importar'
 
@@ -195,12 +197,22 @@ func (p *Parser) analisarImportacao() (Expressao, error) {
 	}
 	p.proximoToken() // consome 'de'
 
-	// Nome do módulo/arquivo
-	if p.tokenAtual().Type != lexer.IDENTIFIER {
-		return nil, fmt.Errorf("esperado nome do módulo após 'de' em %s", p.tokenAtual().Position)
+	// Nome do módulo/arquivo - pode ser IDENTIFIER ou STRING (para caminhos explícitos)
+	var modulo string
+	currentToken := p.tokenAtual()
+
+	if currentToken.Type == lexer.IDENTIFIER {
+		// Importação por nome de módulo: importar a de math
+		modulo = currentToken.Value
+		p.proximoToken() // consome módulo
+	} else if currentToken.Type == lexer.STRING {
+		// Importação por caminho explícito: importar a de "./path/to/file"
+		// Remove as aspas do início e fim
+		modulo = currentToken.Value[1 : len(currentToken.Value)-1]
+		p.proximoToken() // consome string
+	} else {
+		return nil, fmt.Errorf("esperado nome do módulo (identificador) ou caminho (string) após 'de' em %s", currentToken.Position)
 	}
-	modulo := p.tokenAtual().Value
-	p.proximoToken() // consome módulo
 
 	return &Importacao{
 		Simbolos: simbolos,

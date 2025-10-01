@@ -1,0 +1,13 @@
+// Teste de importação com caminho relativo
+// importar simbolo de "./caminho/relativo"
+
+importar dobro, triplo de "./lib/matematica";
+
+definir principal() {
+    x ~> 5;
+    
+    imprime(dobro(x));     // deve imprimir 10
+    imprime(triplo(x));    // deve imprimir 15
+    
+    retornar 0;
+}

@@ -3,3 +3,5 @@ result/saida.s
 solar-compiler
 result/
 main.exe
+programa.ll
+resultado/
