@@ -70,7 +70,7 @@ func (p *Parser) AnalisarPrograma() ([]Expressao, error) {
 		}
 		statements = append(statements, statement)
 
-		// Semicolon é opcional - permite código mais limpo e natural
+		// Semicolon é opcional
 		p.consumirSemicolonOpcional()
 	}
 
@@ -134,7 +134,7 @@ func (p *Parser) analisarStatement() (Expressao, error) {
 			}
 			return &Atribuicao{Nome: token.Value, Valor: valor, Token: token, TipoAnotado: tipoAnnot}, nil
 		case lexer.LPAREN:
-			// Chamada de função do usuário
+			// Chamada de função
 			return p.analisarChamadaFuncao(lexer.NovoToken(lexer.FUNCTION, token.Value, token.Position))
 		default:
 			// Não era atribuição nem chamada: retrocede e trata como expressão comum
@@ -587,7 +587,6 @@ func (p *Parser) chegouAoFim() bool {
 }
 
 // consumirSemicolonOpcional consome um semicolon se estiver presente
-// O semicolon é agora opcional na linguagem Solar para melhor ergonomia
 func (p *Parser) consumirSemicolonOpcional() {
 	if p.tokenAtual().Type == lexer.SEMICOLON {
 		p.proximoToken() // consome o semicolon se presente

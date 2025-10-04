@@ -68,25 +68,6 @@ var funcoesBuiltinPadroes = map[string]FuncaoBuiltin{
 			return nil, nil
 		},
 	},
-	"soma": {
-		Assinatura: AssinaturaFuncao{
-			Nome:           "soma",
-			MinArgumentos:  2,
-			MaxArgumentos:  -1, // ilimitado
-			TiposArgumento: []TipoArgumento{TIPO_INTEIRO},
-			TipoFuncao:     FUNCAO_PURA,
-			Descricao:      "Soma dois ou mais números",
-		},
-		Executar: func(argumentos []interface{}) (interface{}, error) {
-			resultado := 0
-			for _, arg := range argumentos {
-				if num, ok := arg.(int); ok {
-					resultado += num
-				}
-			}
-			return resultado, nil
-		},
-	},
 }
 
 // registrarFuncoesBasicas registra as funções builtin básicas de forma otimizada

@@ -2,9 +2,7 @@ package x86_64
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -65,11 +63,14 @@ func (a *X86_64Backend) Compile(statements []parser.Expressao) error {
 		}
 	}
 
+	// Gera o ponto de entrada _start
+	a.gerarPontoEntrada()
+
 	// Se existe função principal(), chama ela. Senão, executa statements globais
 	if funcaoPrincipal != nil {
 		debug.Printf("  Chamando função principal()...\n")
 		// Chama a função principal()
-		a.output.WriteString("    call principal\n")
+		a.output.WriteString("    call func_principal\n")
 	} else {
 		// Processa statements globais (comportamento antigo)
 		for i, stmt := range statements {
@@ -213,14 +214,9 @@ func (a *X86_64Backend) OperacaoBinaria(operacao *parser.OperacaoBinaria) interf
 func (a *X86_64Backend) ChamadaFuncao(chamada *parser.ChamadaFuncao) interface{} {
 	// Função de usuário: chamada direta por label
 	if _, ok := a.functions[chamada.Nome]; ok {
-		// Avalia argumentos e coloca nos registradores na ordem: rdi, rsi, rdx, rcx, r8, r9
-		regs := []string{"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"}
-		n := len(chamada.Argumentos)
-		for idx := 0; idx < n && idx < len(regs); idx++ {
-			chamada.Argumentos[idx].Aceitar(a)
-			a.output.WriteString(fmt.Sprintf("    mov %%rax, %s\n", regs[idx]))
-		}
+		a.prepararArgumentos(chamada.Argumentos)
 		a.output.WriteString(fmt.Sprintf("    call func_%s\n", chamada.Nome))
+		a.limparArgumentosPilha(len(chamada.Argumentos))
 		return nil
 	}
 	// Valida a função usando o registro
@@ -272,6 +268,9 @@ func (a *X86_64Backend) gerarPrologo() {
 	// Volta para .text para o ponto de entrada
 	a.output.WriteString("\n.section .text\n")
 	a.output.WriteString(".global _start\n\n")
+}
+
+func (a *X86_64Backend) gerarPontoEntrada() {
 	a.output.WriteString("_start:\n")
 }
 
@@ -414,21 +413,16 @@ func (a *X86_64Backend) ComandoPara(cmd *parser.ComandoPara) interface{} {
 	return nil
 }
 
-// Declaração/definição de função do usuário (básica)
+// Declaração/definição de função do usuário
 func (a *X86_64Backend) gerarFuncaoUsuario(nome string, fn *parser.FuncaoDeclaracao) {
-	// Convenção System V: parâmetros em rdi, rsi, rdx, rcx, r8, r9; retorno em rax
 	a.output.WriteString(fmt.Sprintf("func_%s:\n", nome))
-	// Mapear parâmetros para variáveis (como globais simples com mov)
-	regs := []string{"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"}
-	for idx, p := range fn.Parametros {
-		if idx >= len(regs) {
-			break // mais de 6 parâmetros não são suportados
-		}
-		a.declararVariavel(p.Nome)
-		a.output.WriteString(fmt.Sprintf("    mov %s, %s(%%rip)\n", regs[idx], a.getVarName(p.Nome)))
-	}
+
+	// Extrai os parâmetros da convenção de chamada e armazena em variáveis
+	a.extrairParametros(fn.Parametros)
+
 	// Gerar corpo (usando as variáveis globais dos params)
 	fn.Corpo.Aceitar(a)
+
 	// Resultado esperado em %rax (pela última expressão)
 	a.output.WriteString("    ret\n\n")
 }
@@ -454,24 +448,20 @@ func (a *X86_64Backend) getVarName(nome string) string {
 }
 
 func (a *X86_64Backend) compilarAssembly(arquivoAssembly string) error {
-	// Este backend gera binários ELF Linux x86_64. Em outros SOs, apenas gere o .s.
+	// Este backend gera binários ELF Linux x86_64. Em outros SOs, apenas gera o .s.
 	if runtime.GOOS != "linux" {
 		return fmt.Errorf("backend assembly linux só monta/linka em Linux; arquivo gerado: %s", arquivoAssembly)
 	}
 	debug.Printf("Criando arquivo executavel...\n")
 	debug.Printf("Linkando com runtime...\n")
 
-	objectFile := filepath.Join("result", "programa.o")
-	// Garante que o diretório de saída existe
-	if err := os.MkdirAll(filepath.Dir(objectFile), 0o755); err != nil {
-		return fmt.Errorf("erro ao criar diretório de saída: %v", err)
-	}
+	objectFile := "programa.o"
 	cmdAs := exec.Command("as", "-I", ".", "-o", objectFile, arquivoAssembly)
 	if err := cmdAs.Run(); err != nil {
 		return fmt.Errorf("erro ao montar (as): %v", err)
 	}
 
-	executavel := filepath.Join("result", "programa")
+	executavel := "programa"
 	cmdLd := exec.Command("ld", "-o", executavel, objectFile)
 	if err := cmdLd.Run(); err != nil {
 		return fmt.Errorf("erro ao ligar (ld): %v", err)
@@ -488,4 +478,72 @@ func (a *X86_64Backend) reserveID() int {
 	id := a.labelCount
 	a.labelCount++
 	return id
+}
+
+// prepararArgumentos implementa a Convenção System V AMD64 ABI para passagem de argumentos
+// Primeiros 6 args em registradores: rdi, rsi, rdx, rcx, r8, r9
+// Args adicionais (7+) são passados pela pilha
+func (a *X86_64Backend) prepararArgumentos(argumentos []parser.Expressao) {
+	regs := []string{"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"}
+	n := len(argumentos)
+
+	// Aloca espaço na pilha para argumentos 7+ (se necessário)
+	if n > len(regs) {
+		stackArgs := n - len(regs)
+		stackBytes := stackArgs * 8
+		// Alinhamento de 16 bytes (requerido pela System V ABI)
+		if stackBytes%16 != 0 {
+			stackBytes += 8
+		}
+		a.output.WriteString(fmt.Sprintf("    sub $%d, %%rsp\n", stackBytes))
+	}
+
+	// Coloca argumentos 7+ na pilha (em ordem reversa para facilitar acesso)
+	if n > len(regs) {
+		for idx := n - 1; idx >= len(regs); idx-- {
+			argumentos[idx].Aceitar(a)
+			offset := (idx - len(regs)) * 8
+			a.output.WriteString(fmt.Sprintf("    mov %%rax, %d(%%rsp)\n", offset))
+		}
+	}
+
+	// Coloca argumentos 1-6 nos registradores
+	for idx := 0; idx < n && idx < len(regs); idx++ {
+		argumentos[idx].Aceitar(a)
+		a.output.WriteString(fmt.Sprintf("    mov %%rax, %s\n", regs[idx]))
+	}
+}
+
+// limparArgumentosPilha remove argumentos da pilha após uma chamada de função
+func (a *X86_64Backend) limparArgumentosPilha(numArgs int) {
+	regs := []string{"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"}
+	if numArgs > len(regs) {
+		stackArgs := numArgs - len(regs)
+		stackBytes := stackArgs * 8
+		if stackBytes%16 != 0 {
+			stackBytes += 8
+		}
+		a.output.WriteString(fmt.Sprintf("    add $%d, %%rsp\n", stackBytes))
+	}
+}
+
+// extrairParametros extrai parâmetros dos registradores/pilha e armazena em variáveis
+// Implementa o lado receptor da Convenção System V AMD64 ABI
+func (a *X86_64Backend) extrairParametros(parametros []parser.ParametroFuncao) {
+	regs := []string{"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"}
+
+	for idx, p := range parametros {
+		a.declararVariavel(p.Nome)
+
+		if idx < len(regs) {
+			// Parâmetros 1-6: vêm dos registradores
+			a.output.WriteString(fmt.Sprintf("    mov %s, %s(%%rip)\n", regs[idx], a.getVarName(p.Nome)))
+		} else {
+			// Parâmetros 7+: vêm da pilha
+			// Offset: 8 (endereço de retorno) + (idx - 6) * 8
+			offset := 8 + (idx-len(regs))*8
+			a.output.WriteString(fmt.Sprintf("    mov %d(%%rsp), %%r10\n", offset))
+			a.output.WriteString(fmt.Sprintf("    mov %%r10, %s(%%rip)\n", a.getVarName(p.Nome)))
+		}
+	}
 }

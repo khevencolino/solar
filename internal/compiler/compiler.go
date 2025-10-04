@@ -72,7 +72,7 @@ func (c *Compiler) CompilarArquivo(config *CompileConfig) error {
 		return err
 	}
 
-	// Checagem de tipos (semântica)
+	// Checagem de tipos
 	if err := c.checagemTipos(statements); err != nil {
 		if c.debug {
 			fmt.Printf("Erro na checagem de tipos: %v\n", err)
