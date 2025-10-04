@@ -2,7 +2,7 @@
 
 definir ident(x: inteiro, y: inteiro): inteiro { x; }
 
-definir loga(msg: texto): vazio { imprime(0); }
+definir loga(msg: texto): vazio { imprime(msg); }
 
 ident(1, 2);
 loga("ok");

@@ -53,6 +53,25 @@ print_L0:
   syscall
   ret
 
+# imprime_texto: imprime string C (terminada em NUL) cujo endereço está em %rax
+imprime_texto:
+  mov %rax, %rsi        # rsi = ptr
+  xor %rcx, %rcx        # rcx = contador
+  mov %rsi, %rdx        # rdx = cursor
+find_len_Ltxt:
+  movb (%rdx), %al
+  cmp $0, %al
+  je have_len_Ltxt
+  inc %rdx
+  inc %rcx
+  jmp find_len_Ltxt
+have_len_Ltxt:
+  mov $1, %rax          # sys_write
+  mov $1, %rdi          # stdout
+  mov %rcx, %rdx        # tamanho
+  syscall
+  ret
+
 sair:
   mov $60, %rax     # sys_exit
   xor %rdi, %rdi    # codigo de saida (0)

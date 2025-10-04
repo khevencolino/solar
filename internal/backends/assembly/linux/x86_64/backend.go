@@ -2,9 +2,7 @@ package x86_64
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -17,12 +15,15 @@ import (
 )
 
 type X86_64Backend struct {
-	output     strings.Builder
-	variables  map[string]bool
-	decimals   map[string]float64
-	strings    map[string]string
-	labelCount int
-	functions  map[string]*parser.FuncaoDeclaracao
+	output        strings.Builder
+	globalVars    map[string]bool  // Variáveis globais
+	scopeStack    []map[string]int // Pilha de escopos: nome -> offset no stack frame
+	currentOffset int              // Offset atual no stack frame
+	decimals      map[string]float64
+	strings       map[string]string
+	labelCount    int
+	functions     map[string]*parser.FuncaoDeclaracao
+	inFunction    bool // Se estamos dentro de uma função
 }
 
 // Registradores para passagem de argumentos (System V ABI)
@@ -30,10 +31,13 @@ var paramRegisters = []string{"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"}
 
 func NewX86_64Backend() *X86_64Backend {
 	return &X86_64Backend{
-		variables: make(map[string]bool),
-		decimals:  make(map[string]float64),
-		strings:   make(map[string]string),
-		functions: make(map[string]*parser.FuncaoDeclaracao),
+		globalVars:    make(map[string]bool),
+		scopeStack:    []map[string]int{},
+		currentOffset: 0,
+		decimals:      make(map[string]float64),
+		strings:       make(map[string]string),
+		functions:     make(map[string]*parser.FuncaoDeclaracao),
+		inFunction:    false,
 	}
 }
 
@@ -162,14 +166,29 @@ func (a *X86_64Backend) LiteralDecimal(literal *parser.LiteralDecimal) interface
 }
 
 func (a *X86_64Backend) Variavel(variavel *parser.Variavel) interface{} {
-	a.emitf("    mov %s(%%rip), %%rax", a.getVarName(variavel.Nome))
+	isLocal, offset := a.getVarLocation(variavel.Nome)
+	if isLocal {
+		// Variável local no stack
+		a.emitf("    mov %d(%%rbp), %%rax", offset)
+	} else {
+		// Variável global
+		a.emitf("    mov %s(%%rip), %%rax", a.getVarName(variavel.Nome))
+	}
 	return nil
 }
 
 func (a *X86_64Backend) Atribuicao(atribuicao *parser.Atribuicao) interface{} {
 	a.declararVariavel(atribuicao.Nome)
 	atribuicao.Valor.Aceitar(a)
-	a.emitf("    mov %%rax, %s(%%rip)", a.getVarName(atribuicao.Nome))
+
+	isLocal, offset := a.getVarLocation(atribuicao.Nome)
+	if isLocal {
+		// Variável local no stack
+		a.emitf("    mov %%rax, %d(%%rbp)", offset)
+	} else {
+		// Variável global
+		a.emitf("    mov %%rax, %s(%%rip)", a.getVarName(atribuicao.Nome))
+	}
 	return nil
 }
 
@@ -266,17 +285,38 @@ func (a *X86_64Backend) gerarChamadaFuncaoUsuario(chamada *parser.ChamadaFuncao)
 	n := len(chamada.Argumentos)
 	maxRegs := len(paramRegisters)
 
+	// Primeiro, empilha argumentos que vão para o stack (>6) em ordem reversa
+	for idx := n - 1; idx >= maxRegs; idx-- {
+		chamada.Argumentos[idx].Aceitar(a)
+		a.emit("    push %rax")
+	}
+
+	// Depois, passa argumentos via registradores (primeiros 6)
 	for idx := 0; idx < n && idx < maxRegs; idx++ {
 		chamada.Argumentos[idx].Aceitar(a)
 		a.emitf("    mov %%rax, %s", paramRegisters[idx])
 	}
+
 	a.emitf("    call func_%s", chamada.Nome)
+
+	// Limpa o stack se passou argumentos extras
+	if n > maxRegs {
+		extraArgs := n - maxRegs
+		a.emitf("    add $%d, %%rsp", extraArgs*8)
+	}
 }
 
 func (a *X86_64Backend) gerarAssemblyImprime(argumentos []parser.Expressao) {
 	for _, argumento := range argumentos {
-		argumento.Aceitar(a)
-		a.emit("    call imprime_num")
+		// Detecta literal de texto para usar rotina específica
+		switch argumento.(type) {
+		case *parser.LiteralTexto:
+			argumento.Aceitar(a)
+			a.emit("    call imprime_texto")
+		default:
+			argumento.Aceitar(a)
+			a.emit("    call imprime_num")
+		}
 	}
 }
 
@@ -297,7 +337,7 @@ func (a *X86_64Backend) gerarEpilogo() {
 	a.emit("    call sair")
 	a.emit("")
 
-	if len(a.variables) == 0 && len(a.decimals) == 0 && len(a.strings) == 0 {
+	if len(a.globalVars) == 0 && len(a.decimals) == 0 && len(a.strings) == 0 {
 		return
 	}
 
@@ -312,7 +352,7 @@ func (a *X86_64Backend) construirSecaoDados() string {
 	var sb strings.Builder
 	sb.WriteString(".section .data\n")
 
-	for varName := range a.variables {
+	for varName := range a.globalVars {
 		sb.WriteString(fmt.Sprintf("%s: .quad 0\n", a.getVarName(varName)))
 	}
 
@@ -363,11 +403,21 @@ func (a *X86_64Backend) ComandoSe(comando *parser.ComandoSe) interface{} {
 }
 
 func (a *X86_64Backend) Bloco(bloco *parser.Bloco) interface{} {
+	// Cria um novo escopo para blocos aninhados (exceto o primeiro bloco da função)
+	isNestedBlock := a.inFunction && len(a.scopeStack) > 1
+	if isNestedBlock {
+		a.pushScope()
+	}
+
 	for _, comando := range bloco.Comandos {
 		comando.Aceitar(a)
 		if _, isReturn := comando.(*parser.Retorno); isReturn {
 			break
 		}
+	}
+
+	if isNestedBlock {
+		a.popScope()
 	}
 	return nil
 }
@@ -424,20 +474,63 @@ func (a *X86_64Backend) ComandoPara(cmd *parser.ComandoPara) interface{} {
 
 // gerarFuncaoUsuario emite código para uma função definida pelo usuário
 func (a *X86_64Backend) gerarFuncaoUsuario(nome string, fn *parser.FuncaoDeclaracao) {
-	a.emitf("func_%s:", nome)
+	// Prologue básico
+	a.inFunction = true
+	a.currentOffset = 0
+	a.pushScope()
 
+	a.emitf("func_%s:", nome)
+	a.emit("    push %rbp")
+	a.emit("    mov %rsp, %rbp")
+
+	// Alocação de parâmetros
 	maxRegs := len(paramRegisters)
-	for idx, p := range fn.Parametros {
-		if idx >= maxRegs {
-			break
+	numParams := len(fn.Parametros)
+	if numParams > 0 {
+		// Reserva espaço de uma vez para todos parâmetros locais
+		// Offsets: -8, -16, ...
+		for i := 0; i < numParams; i++ {
+			a.currentOffset -= 8
 		}
-		a.declararVariavel(p.Nome)
-		a.emitf("    mov %s, %s(%%rip)", paramRegisters[idx], a.getVarName(p.Nome))
+		// Reserva espaço
+		a.emitf("    sub $%d, %%rsp", -a.currentOffset)
+		// Mapeia nomes -> offsets
+		scope := a.scopeStack[len(a.scopeStack)-1]
+		for i := 0; i < numParams; i++ {
+			offset := -8 * (i + 1)
+			scope[fn.Parametros[i].Nome] = offset
+		}
+		// Move registradores
+		for i := 0; i < numParams && i < maxRegs; i++ {
+			offset := scope[fn.Parametros[i].Nome]
+			a.emitf("    mov %s, %d(%%rbp)", paramRegisters[i], offset)
+		}
+		// Argumentos extras vindos do stack do caller
+		for i := maxRegs; i < numParams; i++ {
+			stackArgOffset := 16 + (i-maxRegs)*8
+			offset := scope[fn.Parametros[i].Nome]
+			a.emitf("    mov %d(%%rbp), %%rax", stackArgOffset)
+			a.emitf("    mov %%rax, %d(%%rbp)", offset)
+		}
 	}
 
+	// Corpo da função
+	posBefore := a.output.Len()
 	fn.Corpo.Aceitar(a)
-	a.emit("    ret")
+	bodyCode := a.output.String()[posBefore:]
+	hasExplicitReturn := strings.Contains(bodyCode, "ret")
+
+	if !hasExplicitReturn {
+		// Epílogo padrão
+		a.emit("    mov %rbp, %rsp")
+		a.emit("    pop %rbp")
+		a.emit("    ret")
+	}
 	a.emit("")
+
+	a.popScope()
+	a.inFunction = false
+	a.currentOffset = 0
 }
 
 func (a *X86_64Backend) FuncaoDeclaracao(fn *parser.FuncaoDeclaracao) interface{} {
@@ -448,6 +541,9 @@ func (a *X86_64Backend) Retorno(ret *parser.Retorno) interface{} {
 	if ret.Valor != nil {
 		ret.Valor.Aceitar(a)
 	}
+	// Cleanup do stack frame antes de retornar
+	a.emit("    mov %rbp, %rsp")
+	a.emit("    pop %rbp")
 	a.emit("    ret")
 	return nil
 }
@@ -456,10 +552,48 @@ func (a *X86_64Backend) Importacao(imp *parser.Importacao) interface{} {
 	return nil
 }
 
-// === Helpers para gerenciamento de símbolos ===
+// pushScope cria um novo escopo local
+func (a *X86_64Backend) pushScope() {
+	a.scopeStack = append(a.scopeStack, make(map[string]int))
+}
 
+// popScope remove o escopo mais recente
+func (a *X86_64Backend) popScope() {
+	if len(a.scopeStack) > 0 {
+		a.scopeStack = a.scopeStack[:len(a.scopeStack)-1]
+	}
+}
+
+// declararVariavel declara uma variável no escopo apropriado
 func (a *X86_64Backend) declararVariavel(nome string) {
-	a.variables[nome] = true
+	if a.inFunction && len(a.scopeStack) > 0 {
+		// Já existe em algum escopo? (reatribuição, não aloca)
+		for i := len(a.scopeStack) - 1; i >= 0; i-- {
+			if _, ok := a.scopeStack[i][nome]; ok {
+				return
+			}
+		}
+		// Nova variável local: expande frame dinamicamente
+		a.currentOffset -= 8
+		a.emit("    sub $8, %rsp")
+		currentScope := a.scopeStack[len(a.scopeStack)-1]
+		currentScope[nome] = a.currentOffset
+		return
+	}
+	// Variável global
+	a.globalVars[nome] = true
+}
+
+// getVarLocation retorna a localização de uma variável (stack ou global)
+func (a *X86_64Backend) getVarLocation(nome string) (isLocal bool, offset int) {
+	// Procura nos escopos locais (do mais recente ao mais antigo)
+	for i := len(a.scopeStack) - 1; i >= 0; i-- {
+		if off, exists := a.scopeStack[i][nome]; exists {
+			return true, off
+		}
+	}
+	// Se não encontrar, é global
+	return false, 0
 }
 
 func (a *X86_64Backend) getVarName(nome string) string {
@@ -486,7 +620,7 @@ func (a *X86_64Backend) reserveID() int {
 	return id
 }
 
-// === Compilação e linkagem ===
+// Compilação e linkagem
 
 func (a *X86_64Backend) compilarAssembly(arquivoAssembly string) error {
 	if runtime.GOOS != "linux" {
@@ -496,16 +630,13 @@ func (a *X86_64Backend) compilarAssembly(arquivoAssembly string) error {
 	debug.Printf("Criando arquivo executavel...\n")
 	debug.Printf("Linkando com runtime...\n")
 
-	objectFile := filepath.Join("result", "programa.o")
-	if err := os.MkdirAll(filepath.Dir(objectFile), 0o755); err != nil {
-		return fmt.Errorf("erro ao criar diretório de saída: %v", err)
-	}
+	objectFile := "programa.o"
 
 	if err := a.montar(arquivoAssembly, objectFile); err != nil {
 		return err
 	}
 
-	executavel := filepath.Join("result", "programa")
+	executavel := "programa"
 	if err := a.linkar(objectFile, executavel); err != nil {
 		return err
 	}

@@ -6,3 +6,6 @@ main.exe
 programa.ll
 resultado/
 programa.s
+programa.o
+programa.out
+programa

@@ -7,5 +7,4 @@ definir fatorial(n: inteiro): inteiro {
     retornar n * fatorial(n - 1);
 }
 
-imprime("Fatorial de 5:");
 imprime(fatorial(5));

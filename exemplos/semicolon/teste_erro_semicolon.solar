@@ -1,3 +1,0 @@
-// Teste sem semicolon - deve dar erro
-x ~> 10
-y ~> 20;

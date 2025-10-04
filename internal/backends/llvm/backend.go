@@ -42,7 +42,7 @@ func NewLLVMBackend() *LLVMBackend {
 func (l *LLVMBackend) GetName() string      { return "LLVM IR" }
 func (l *LLVMBackend) GetExtension() string { return ".ll" }
 
-// Compile gera código LLVM IR completo
+// Compile gera código LLVM IR
 func (l *LLVMBackend) Compile(statements []parser.Expressao) error {
 	debug.Printf("Compilando para LLVM IR...\n")
 

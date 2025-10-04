@@ -1,0 +1,15 @@
+// Teste de função com mais de 6 argumentos
+
+definir soma8(a, b, c, d, e, f, g, h) {
+  retornar a + b + c + d + e + f + g + h;
+}
+
+// Testa com 8 argumentos
+imprime(soma8(1, 2, 3, 4, 5, 6, 7, 8)); // Deve imprimir 36
+
+definir soma10(a, b, c, d, e, f, g, h, i, j) {
+  retornar a + b + c + d + e + f + g + h + i + j;
+}
+
+// Testa com 10 argumentos
+imprime(soma10(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)); // Deve imprimir 55
